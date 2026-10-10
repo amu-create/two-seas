@@ -1,10 +1,10 @@
 // 함정: 틈에서 솟는 불꽃(vents)과 바닥을 구르는 물결(wave)
 // seenBy: 누구 화면에 보이는가 — 1(그림자 바다, 기본) / 0(빛의 바다) / 'both'(둘 다. 어둠 속 장에서 쓴다)
-// 안 보이는 쪽에게는 바닥의 틈(격자)만 보인다 → 보이는 쪽이 "지금 가!", "뛰어!" 하고 말해줘야 한다.
+// 불은 보이는 쪽의 세계에만 있다: 보이는 사람만 데고, 안 보이는 사람은 그냥 지나간다. (격자도 보이는 쪽에만 그린다)
 // 타이밍은 두 폰의 공유 시계로 계산한다. 닿으면 방울을 타고 바로 앞 등불로 돌아간다.
 import { TAU, sat, rgba, hash1 } from '../util.js';
 
-const TINT = { // 그림자 바다의 불꽃은 분홍·보라, 빛의 바다의 불꽃은 금빛·민트
+export const TINT = { // 그림자 바다의 불꽃은 분홍·보라, 빛의 바다의 불꽃은 금빛·민트
   1: ['#7a2cff', '#b04cff', '#ff8ae2', '#ffe3fb', '#ff7ad9', '#ffd0f4'],
   0: ['#18b890', '#4fe0b0', '#ffe9a0', '#fffbe0', '#9dffd8', '#fff3c4'],
 };
@@ -33,13 +33,14 @@ export class Vents {
     return out;
   }
   // 시험용 봇이 쓰는 정보: 지금 위험한 구역들
-  hazards(tc) { return this.harmless ? [] : this.vents.map((v) => { const p = this.ventPhase(v, tc); return { x0: v.x, x1: v.x + v.w, y0: v.y || 0, y1: (v.y || 0) + (v.h || 2.3), active: p.active, activeIn: p.activeIn, clearIn: p.clearIn }; }); }
+  hazards(tc, g) { return this.harmless || (g && !g.sees(this.seenBy)) ? [] : this.vents.map((v) => { const p = this.ventPhase(v, tc); return { x0: v.x, x1: v.x + v.w, y0: v.y || 0, y1: (v.y || 0) + (v.h || 2.3), active: p.active, activeIn: p.activeIn, clearIn: p.clearIn }; }); }
 
   solids() {}
 
   update(g) {
     const me = g.me;
     if (this.harmless || me.state !== 'play' || me.safe > 0) return;
+    if (!g.sees(this.seenBy)) return; // 내 눈에 안 보이는 불은 내 세계에 없다 → 나는 데지 않는다
     const tc = g.tc;
     for (const v of this.vents) {
       const p = this.ventPhase(v, tc), y0 = v.y || 0, h = v.h || 2.3;
@@ -58,7 +59,8 @@ export class Vents {
   draw(g, ctx, layer) {
     const pal = g.pal, tc = g.tc, sees = g.sees(this.seenBy), T = this.tint(g);
     if (layer === 'back') {
-      for (const v of this.vents) { // 틈(격자)은 둘 다 본다
+      if (!sees) return;
+      for (const v of this.vents) { // 틈(격자)
         const y = -(v.y || 0);
         ctx.fillStyle = rgba('#000000', 0.45);
         rr(ctx, v.x + 0.1, y + 0.03, v.w - 0.2, 0.16, 0.08); ctx.fill();
@@ -106,7 +108,7 @@ export class Vents {
 
 function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 
-function flame(ctx, x, y, w, h, a, t, seed, T) {
+export function flame(ctx, x, y, w, h, a, t, seed, T) {
   const n = Math.max(3, Math.round(w / 0.42));
   const g = ctx.createLinearGradient(0, y - h, 0, y);
   g.addColorStop(0, rgba(T[0], 0)); g.addColorStop(0.35, rgba(T[1], 0.75 * a)); g.addColorStop(1, rgba(T[2], 0.95 * a));

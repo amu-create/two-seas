@@ -1,5 +1,5 @@
 // 5장 · 두 개의 달 — 실 당기기를 배우고, 바다가 두 번 뒤바뀌는 가운데 지금까지의 모든 것을 쓴다
-import { Planks } from '../puzzles/planks.js';
+import { Links } from '../puzzles/worlds.js';
 import { Vents } from '../puzzles/vents.js';
 import { Movers } from '../puzzles/movers.js';
 import { Lift } from '../puzzles/lift.js';
@@ -20,12 +20,15 @@ export function makeChapter5() {
     ],
     checkpoints: cps([2.9, { x: 12.4, y: 2.8 }, { x: 29.4, y: 2.8 }, 37, 49.6, 63, { x: 72.4, y: 4.6 }, { x: 88, y: 4.6 }]),
     puzzles: [
-      // 넓은 틈(8칸): 빛의 눈에만 보이는 나룻배 발판이 오간다. 먼저 건넌 쪽이 실을 당겨 주면 짝은 허공을 건너온다.
+      // 넓은 틈(8칸): 나룻배 발판은 빛의 세계에만 있다. 먼저 건넌 쪽이 실을 당겨 주면 짝은 허공을 건너온다.
       new Movers({ id: 'ferry', seenBy: 0, list: [{ x0: 20.3, x1: 25.5, y: 2.8, w: 2.2, period: 8, phase: 0 }] }),
-      new Planks({ id: 'br1', x: 40, n: 7 }),
-      new Vents({ id: 'hall', vents: [{ x: 52, w: 2, period: 6, on: 1.4, phase: 0 }, { x: 56, w: 2, period: 6, on: 1.4, phase: 3 }] }),
+      // 반쪽 다리 (바다가 뒤바뀐 뒤라 누가 어느 반쪽을 가졌는지도 바뀌어 있다)
+      new Links({ id: 'br1', things: [{ kind: 'bridge', world: 0, x: 40, w: 4.8 }, { kind: 'bridge', world: 1, x: 44.8, w: 3.6 }] }),
+      // 서로 꺼 주는 불: 내 불은 내 세계에만, 끄는 돌은 짝의 세계에만
+      new Links({ id: 'hall', keys: [{ x: 54.7, world: 1 }, { x: 59.0, world: 0 }], things: [{ kind: 'flame', world: 0, x: 52, w: 1.8, key: 0 }, { kind: 'flame', world: 1, x: 56.4, w: 1.8, key: 1 }] }),
       new Lift({ id: 'lift', x: 67.5, w: 2.5, y0: 0, y1: 4.6, cranks: [{ x: 64.4, y: 0 }, { x: 72.4, y: 4.6 }] }),
-      new Vents({ id: 'jet', vents: [{ x: 67.5, w: 2.5, y: 2.3, h: 0.9, period: 5.5, on: 1.8, phase: 0 }] }),
+      new Vents({ id: 'jet', seenBy: 1, vents: [{ x: 67.5, w: 2.5, y: 2.3, h: 0.9, period: 5.5, on: 1.8, phase: 0 }] }),
+      new Vents({ id: 'jet0', seenBy: 0, vents: [{ x: 67.5, w: 2.5, y: 2.3, h: 0.9, period: 5.5, on: 1.8, phase: 2.75 }] }),
       new Lanterns({ id: 'lamps', beatId: 'moon', y: 4.6, rows: [{ xs: [75.4, 76.7, 78, 79.3] }, { xs: [82.7, 84, 85.3, 86.6] }], stoneX: 81 }),
     ],
     beats: {

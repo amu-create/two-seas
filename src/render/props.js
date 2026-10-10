@@ -77,7 +77,18 @@ export function sign(g, ctx, x, y, kind) {
   const head = (hx, hy, s, col) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(hx - s * 0.62, hy - s * 0.72, s * 0.34, 0, TAU); ctx.arc(hx + s * 0.62, hy - s * 0.72, s * 0.34, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.ellipse(hx, hy, s, s * 0.82, 0, 0, TAU); ctx.fill(); };
   const arrow = (ax, ay, dx, dy) => { ctx.strokeStyle = W; ctx.fillStyle = W; ctx.lineWidth = 0.06; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + dx, ay + dy); ctx.stroke(); const a = Math.atan2(dy, dx); ctx.beginPath(); ctx.moveTo(ax + dx + Math.cos(a) * 0.12, ay + dy + Math.sin(a) * 0.12); ctx.lineTo(ax + dx + Math.cos(a + 2.5) * 0.14, ay + dy + Math.sin(a + 2.5) * 0.14); ctx.lineTo(ax + dx + Math.cos(a - 2.5) * 0.14, ay + dy + Math.sin(a - 2.5) * 0.14); ctx.closePath(); ctx.fill(); };
   const bob = Math.sin(g.t * 2.2) * 0.04;
-  if (kind === 'stack') { head(-0.2, 0.3, 0.26, A); head(-0.2, -0.18 + bob, 0.26, B); arrow(0.45, 0.25, 0, -0.5); }
+  if (kind === 'box') { // 짝이 상자를 밀어 주면 → 그걸 밟고 건넌다
+    ctx.fillStyle = W; rr(ctx, -0.16, -0.02, 0.4, 0.34, 0.05); ctx.fill(); head(0.52, 0.12, 0.2, B); arrow(0.3, -0.3, -0.4, 0);
+    head(-0.58, -0.02 + bob, 0.2, A); ctx.strokeStyle = A; ctx.lineWidth = 0.06; ctx.beginPath(); ctx.moveTo(-0.82, 0.36); ctx.lineTo(-0.44, 0.36); ctx.stroke();
+    ctx.strokeStyle = B; ctx.setLineDash([0.1, 0.07]); ctx.beginPath(); ctx.moveTo(-0.3, 0.36); ctx.lineTo(0.82, 0.36); ctx.stroke(); ctx.setLineDash([]);
+  } else if (kind === 'link') { // 내가 돌을 밟으면 → 짝의 세계에 다리가 놓인다
+    head(-0.48, -0.08 + bob * 0.5, 0.22, A); ctx.fillStyle = W; rr(ctx, -0.78, 0.2, 0.6, 0.13, 0.05); ctx.fill();
+    arrow(-0.1, 0.05, 0.28, 0);
+    head(0.5, -0.12, 0.2, B); ctx.strokeStyle = B; ctx.lineWidth = 0.06; ctx.setLineDash([0.12, 0.07]); ctx.beginPath(); ctx.moveTo(0.22, 0.26); ctx.lineTo(0.8, 0.26); ctx.stroke(); ctx.setLineDash([]);
+  } else if (kind === 'ride') { // 짝의 머리에 타고 건넌다
+    head(-0.05, 0.3, 0.24, A); head(-0.05, -0.14 + bob, 0.24, B); arrow(0.32, 0.36, 0.36, 0);
+    ctx.strokeStyle = A; ctx.lineWidth = 0.06; ctx.beginPath(); ctx.moveTo(-0.5, 0.56); ctx.lineTo(0.8, 0.56); ctx.stroke();
+  } else if (kind === 'stack') { head(-0.2, 0.3, 0.26, A); head(-0.2, -0.18 + bob, 0.26, B); arrow(0.45, 0.25, 0, -0.5); }
   else if (kind === 'hold') { head(-0.35, -0.02 + bob * 0.5, 0.24, A); ctx.fillStyle = W; rr(ctx, -0.7, 0.32, 0.7, 0.14, 0.05); ctx.fill(); arrow(0.1, 0.39, 0.42, 0); ctx.strokeStyle = B; ctx.lineWidth = 0.07; ctx.strokeRect(0.56, -0.3, 0.2, 0.7); }
   else if (kind === 'pull') { head(-0.52, 0.25, 0.22, A); head(0.5, -0.22, 0.22, B); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 0.04; ctx.setLineDash([0.07, 0.06]); ctx.lineDashOffset = -g.t * 0.4; ctx.beginPath(); ctx.moveTo(-0.3, 0.18); ctx.lineTo(0.3, -0.14); ctx.stroke(); ctx.setLineDash([]); arrow(-0.3, 0.42, 0.34, -0.18); }
   else if (kind === 'crank') { ctx.strokeStyle = W; ctx.lineWidth = 0.07; ctx.beginPath(); ctx.arc(-0.38, 0.05, 0.3, 0, TAU); ctx.stroke(); ctx.save(); ctx.translate(-0.38, 0.05); ctx.rotate(g.t * 2); ctx.beginPath(); ctx.moveTo(-0.3, 0); ctx.lineTo(0.3, 0); ctx.moveTo(0, -0.3); ctx.lineTo(0, 0.3); ctx.stroke(); ctx.restore(); head(0.42, 0.1 - ((g.t * 0.5) % 1) * 0.3, 0.2, B); arrow(0.42, 0.5, 0, -0.01); }

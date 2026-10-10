@@ -1,5 +1,5 @@
-// 떠다니는 발판: 두 폰의 공유 시계에 맞춰 좌우로 오간다. 둘 다 밟을 수 있지만 seenBy 쪽 화면에만 보인다.
-// 안 보이는 쪽은 허공으로 뛰어야 한다 → 보이는 쪽이 "지금 뛰어!" 하고 말해준다.
+// 떠다니는 발판: 두 폰의 공유 시계에 맞춰 좌우로 오간다. seenBy 쪽의 세계에만 있다(그쪽만 보이고 그쪽만 밟는다).
+// 안 보이는 쪽은 짝의 머리 위에 타고 건넌다(목말) → "타!" "지금 간다!"
 // cfg: { id, seenBy: 0|1|'both', list:[{x0,x1,y,w,period,phase}] }
 import { TAU, rgba, lerp } from '../util.js';
 
@@ -10,7 +10,7 @@ export class Movers {
     const a = TAU * (tc + (m.phase || 0)) / m.period;
     return { x: lerp(m.x0, m.x1, 0.5 - 0.5 * Math.cos(a)), vx: (m.x1 - m.x0) * 0.5 * Math.sin(a) * TAU / m.period };
   }
-  solids(g, out) { const tc = g.tc; for (const m of this.list) { const p = this.at(m, tc); out.push({ x: p.x, y: m.y - 0.3, w: m.w, h: 0.3, vx: p.vx, mover: true }); } }
+  solids(g, out) { if (!g.sees(this.seenBy)) return; /* 내 눈에 안 보이는 발판은 내 세계에 없다 */ const tc = g.tc; for (const m of this.list) { const p = this.at(m, tc); out.push({ x: p.x, y: m.y - 0.3, w: m.w, h: 0.3, vx: p.vx, mover: true }); } }
   update() {}
   host() { return false; }
   onFx() {}

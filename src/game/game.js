@@ -7,7 +7,7 @@ import { palette, drawSolid, makeDecor, drawFar, drawNear, drawFore, drawWater, 
 import { Fx } from '../render/fx.js';
 import { makeChapter, CHAPTERS } from '../chapters/index.js';
 
-const VH = 8.6;              // 화면 세로에 보이는 칸 수
+const VH = 10.4;             // 화면 세로에 보이는 칸 수 (고양이가 크다는 의견으로 8.6 → 10.4: 전체를 17%쯤 멀리서 본다)
 const CAM_Y = 0.2 * VH;      // 땅이 화면 아래에서 30% 높이에 오게
 const SAVE_KEY = 'twoseas.save.v2';
 const PROGRESS_KEY = 'twoseas.progress.v1';
@@ -300,7 +300,8 @@ export class Game {
     for (const p of this.chapter.puzzles) p.solids(this, out);
     // 목말: 가만히 서 있는 짝의 머리 위에 올라설 수 있다
     const o = this.other;
-    if (this.chapter.stack && o.present && o.state === 'play' && o.ground && Math.abs(o.vx) < 1.5) out.push({ x: o.x - 0.36, y: o.y + 0.8, w: 0.72, h: 0.12, oneWay: true, head: true });
+    // 짝이 걸어가면 머리 위의 나도 함께 실려 간다 (내 세계에 길이 없는 곳은 이렇게 건넌다)
+    if (this.chapter.stack && o.present && o.state === 'play' && o.ground) out.push({ x: o.x - 0.42, y: o.y + 0.8, w: 0.84, h: 0.12, oneWay: true, head: true, vx: o.vx });
     return out;
   }
 
@@ -318,6 +319,9 @@ export class Game {
     me.pulling = !!(ch.pull && inp.pull && me.ground && me.state === 'play' && other.present);
     const ext = ch.pull && other.pulling && other.state === 'play' && !me.pulling ? { pullTo: { x: other.x, y: other.y } } : null;
     me.update(dt, pinp, solids, lim, ext);
+    // 목말: 짝의 머리 위에 가만히 서 있으면 짝을 따라 실려 간다
+    me.riding = !!(ch.stack && other.present && other.state === 'play' && me.state === 'play' && me.ground && Math.abs(me.y - (other.y + 0.92)) < 0.08 && Math.abs(me.x - other.x) < 0.85);
+    if (me.riding && !pinp.x) me.x = damp(me.x, other.x, 16, dt);
     if (me.jumped) { this.sound('jump', { x: me.x }); this.fx.burst('dust', me.x, me.y + 0.05, this.q.sparks(4), { speed: 0.8, spread: Math.PI, color: '#cfe9ff', life: 0.4, size: 0.1 }); }
     if (me.popped) { me.popped = false; this.fx.ring(me.x, me.y + 0.6, '#dff7ff', 0.9, 0.4); this.fx.burst('spark', me.x, me.y + 0.6, this.q.sparks(8), { speed: 2.2, color: '#dff7ff', life: 0.45 }); this.sound('pop', { x: me.x }); }
     if (me.state === 'play' && me.y < ch.waterKill) this.failMe('water');
@@ -489,7 +493,7 @@ export class Game {
 
   _camera(dt) {
     const me = this.me, o = this.other, v = this.view, c = this.cam;
-    const s0 = Math.min(v.H / VH, v.W / 17); // 좁은 화면(태블릿 등)에서도 가로로 17칸은 보이게
+    const s0 = Math.min(v.H / VH, v.W / 20); // 좁은 화면(태블릿 등)에서도 가로로 20칸은 보이게
     let zoomT = 1, tx = o.present ? lerp(me.x, o.x, 0.4) : me.x;
     tx += me.face * 0.5;
     if (this.beatNow) { const { b, u } = this.beatNow; if (b.focus != null && u > 0.15 && u < 1.7) tx = lerp(tx, b.focus, 0.75); }

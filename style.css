@@ -103,3 +103,27 @@ button.big.ghost { color: #fff; background: rgba(255, 255, 255, 0.09); border: 1
 #btnMute svg .f { fill: #fff; stroke: none; }
 #btnMute svg .x { display: none; } #btnMute.off svg .x { display: block; } #btnMute.off svg .w { display: none; }
 #dbg { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 30px); left: 50%; transform: translateX(-50%); font-size: 11px; background: rgba(0, 0, 0, 0.45); padding: 3px 9px; border-radius: 9px; letter-spacing: 0.02em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+#btnPull { position: absolute; right: calc(env(safe-area-inset-right, 0px) + 3.2vw + clamp(72px, 22vh, 108px) + 2.2vw); bottom: calc(env(safe-area-inset-bottom, 0px) + 5vh + 9vh + clamp(58px, 17vh, 84px) + 2.4vh); --s: clamp(54px, 16vh, 78px); background: rgba(255, 240, 190, 0.16); border-color: rgba(255, 240, 200, 0.7); }
+#btnPull.on { background: rgba(255, 240, 190, 0.45); box-shadow: 0 0 20px rgba(255, 235, 170, 0.6); }
+.chapters { display: flex; gap: 1.6vw; justify-content: center; margin: -2.4vh 0 3.4vh; }
+.chapters button { min-width: clamp(64px, 13vw, 118px); padding: 1.3vh 6px 1.5vh; border-radius: 2.4vh; border: 1.5px solid rgba(255, 255, 255, 0.28); background: rgba(255, 255, 255, 0.06); font-size: clamp(9px, 2.7vh, 12px); letter-spacing: 0.06em; line-height: 1.5; opacity: 0.9; }
+.chapters button b { display: block; font-weight: 200; font-size: clamp(15px, 5.4vh, 26px); }
+.chapters button.sel { border-color: #a5ffdc; background: rgba(140, 255, 210, 0.16); box-shadow: 0 0 18px rgba(130, 255, 210, 0.4); }
+.chapters button.locked { opacity: 0.3; }
+#endui { display: flex; gap: 3vw; justify-content: center; }
+h1 { font-size: clamp(30px, 11vh, 70px); }
+.sub { margin: 1.2vh 0 5.4vh; }
+.panel { padding-bottom: 14vh; }
+
+/* 음성 대화 단추: 소리 단추 왼쪽. 꺼짐(빗금) / 켜짐(민트빛) / 쓸 수 없음(흐림) */
+#btnMic { position: fixed; z-index: 12; top: calc(env(safe-area-inset-top, 0px) + 6px); right: calc(env(safe-area-inset-right, 0px) + 56px); width: 38px; height: 38px; border-radius: 50%; border: none; background: rgba(255, 255, 255, 0.06); opacity: 0.6; padding: 8px; }
+#btnMic svg { width: 100%; height: 100%; fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#btnMic svg .f { fill: none; }
+#btnMic.on { opacity: 1; background: rgba(140, 255, 210, 0.22); box-shadow: 0 0 14px rgba(130, 255, 210, 0.55); }
+#btnMic.on svg { stroke: #a5ffdc; } #btnMic.on svg .f { fill: #a5ffdc; } #btnMic.on svg .x { display: none; }
+#btnMic.na { opacity: 0.28; }
+#btnMic i { position: absolute; right: 3px; top: 3px; width: 9px; height: 9px; border-radius: 50%; background: #ffb3e6; box-shadow: 0 0 8px #ffb3e6; display: none; animation: blink 1.4s infinite; }
+#btnMic.peer i { display: block; }
+#toast { position: fixed; z-index: 30; top: calc(env(safe-area-inset-top, 0px) + 52px); right: calc(env(safe-area-inset-right, 0px) + 10px); max-width: 62vw; padding: 8px 14px; border-radius: 14px; background: rgba(10, 16, 30, 0.82); border: 1px solid rgba(255, 255, 255, 0.18); font-size: 12px; line-height: 1.5; letter-spacing: 0.02em; pointer-events: none; transition: opacity 0.3s; }
+#toast.off { opacity: 0; }

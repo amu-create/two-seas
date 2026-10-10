@@ -5,10 +5,15 @@ import { Player, RemotePlayer, PHYS } from './player.js';
 import { drawCat, drawCatShadow, LOOKS } from '../render/cat.js';
 import { palette, drawSolid, makeDecor, drawFar, drawNear, drawFore, drawWater, drawThread, drawShellLamp, drawFallback } from '../render/scene.js';
 import { Fx } from '../render/fx.js';
+import { makeChapter, CHAPTERS } from '../chapters/index.js';
 
 const VH = 8.6;              // 화면 세로에 보이는 칸 수
 const CAM_Y = 0.2 * VH;      // 땅이 화면 아래에서 30% 높이에 오게
-const SAVE_KEY = 'twoseas.save.v1';
+const SAVE_KEY = 'twoseas.save.v2';
+const PROGRESS_KEY = 'twoseas.progress.v1';
+// 어디까지 깼는지 (이 폰에 저장). 다음에 방을 만들 때 그 다음 장부터 고를 수 있다.
+export function loadProgress() { try { return Math.max(0, Math.min(CHAPTERS.length, Number(JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}').cleared) || 0)); } catch (e) { return 0; } }
+function saveProgress(n) { try { if (n > loadProgress()) localStorage.setItem(PROGRESS_KEY, JSON.stringify({ cleared: n, at: Date.now() })); } catch (e) { /* 저장 못 해도 진행 */ } }
 const QUALITY = [            // 좋은 폰 → 느린 폰
   { dpr: 2, parts: 220, k: 1, bgSkip: 1, glow: true },
   { dpr: 1.75, parts: 160, k: 0.75, bgSkip: 1, glow: true },
@@ -55,7 +60,7 @@ export class Game {
 
   // ---------- 세계 상태 ----------
   _freshWorld() {
-    const W = { rev: 1, ch: this.chapter.id, phase: 'lobby', t0: 0, beats: {}, end: 0, pz: {} };
+    const W = { rev: 1, ch: this.chapter.id, phase: 'lobby', t0: 0, beats: {}, flips: [], end: 0, pz: {} };
     // 퍼즐 배치(가짜 발판·문양·정답 기둥)는 방을 만들 때마다 달라진다
     for (const p of this.chapter.puzzles) { const st = p.init(); if ('seed' in st) st.seed = 1 + Math.floor(Math.random() * 1e6); W.pz[p.id] = st; }
     return W;
@@ -66,8 +71,19 @@ export class Game {
     const now = this.link ? this.link.hostNow() : performance.timeOrigin + performance.now();
     return (now - this.W.t0) / 1000;
   }
-  get swapped() { return this.W.end > 0 && this.tc - this.W.end > 3.85; }
-  get viewRole() { return this.swapped ? 1 - this.role : this.role; } // 지금 내 화면이 보는 세계 (0 빛 / 1 그림자)
+  // 지금 내 화면이 보는 바다 (0 빛 / 1 그림자). 장마다 처음부터 뒤바뀌어 있을 수 있고(swap), 도중에 뒤바뀌기도 한다(flips).
+  get viewRole() { const tc = this.tc; let n = 0; for (const t of this.W.flips || []) if (tc - t > 0.65) n++; return this.role ^ (this.chapter.swap ? 1 : 0) ^ (n & 1); }
+  sees(kind) { return kind === 'both' || this.viewRole === kind; }
+  // 장 바꾸기: 지도·퍼즐을 새로 만들고 고양이를 출발점에 세운다
+  setChapter(n) {
+    this.chapter = makeChapter(n);
+    this.decor = makeDecor(this.chapter.length, 7 + this.chapter.id);
+    this.lampLit = this.chapter.checkpoints.map(() => 0);
+    this.seenBeats.clear(); this._endReset(); this._flipSeen = 0; this.beatNow = null;
+    this.card.end = 0; this.letter = 0; this.input.locked = false;
+    this.setRole(this.role);
+    this.ui.onChapter(this.chapter);
+  }
   keyHit(code) { const n = this.keysHit.get(code) || 0; if (n > 0) this.keysHit.set(code, n - 1); return n > 0; }
 
   setRole(role) {
@@ -77,7 +93,7 @@ export class Game {
     this.other = new RemotePlayer(1 - role, sp[1 - role].x, sp[1 - role].y);
     this.me.face = 1;
     this.cam.x = this.me.x + 2;
-    this.swapK = role;
+    this.swapK = this.viewRole;
   }
 
   // ---------- 연결 ----------
@@ -107,6 +123,7 @@ export class Game {
     const first = this.W.phase === 'lobby' && d.W.phase !== 'lobby';
     if (d.W.rev < this.W.rev && !d.W.reset) return;
     const wasEnd = this.W.end;
+    if (d.W.ch !== this.chapter.id) { this.setChapter(d.W.ch); this._restored = false; } // 방장이 다른 장을 골랐다
     this.W = d.W;
     if (first) {
       this.card.title = 0.001;
@@ -128,10 +145,12 @@ export class Game {
     this.setRole(this.role);
     this.seenBeats.clear(); this.card.end = 0; this.card.title = 0.001; this.letter = 0;
     this.input.locked = false; this.ui.onEnd(false);
-    this.lampLit.fill(0);
+    this.lampLit.fill(0); this._flipSeen = 0; this._endReset();
   }
-  restartChapter() { // 방장만: 처음부터 다시
-    if (!this.isHost) { this.act('restart', {}); return; }
+  nextChapter() { if (this.chapter.id < CHAPTERS.length) this.restartChapter(this.chapter.id + 1); }
+  restartChapter(n) { // 이 장을 처음부터 다시, 또는 n장으로 (손님이 눌러도 방장이 처리한다)
+    if (!this.isHost) { this.act('restart', { ch: n || this.chapter.id }); return; }
+    if (n && n !== this.chapter.id) this.setChapter(n);
     const W = this._freshWorld();
     W.rev = this.W.rev + 10; W.phase = 'play'; W.reset = Date.now();
     W.t0 = (this.link ? this.link.hostNow() : performance.timeOrigin + performance.now()) + 300;
@@ -144,7 +163,7 @@ export class Game {
     else if (this.link) this.link.send('act', { type, data });
   }
   _hostAct(from, type, data) {
-    if (type === 'restart') { this.restartChapter(); return; }
+    if (type === 'restart') { this.restartChapter(data && data.ch); return; }
     let ch = false;
     for (const p of this.chapter.puzzles) if (p.host(this, this.W.pz[p.id], from, type, data || {})) ch = true;
     if (ch) { this.W.rev++; this._dirty = true; }
@@ -156,7 +175,13 @@ export class Game {
     if (except !== this.role) this._fx(n, d);
   }
   _fx(n, d) { for (const p of this.chapter.puzzles) p.onFx(this, n, d || {}); }
-  beat(id) { if (this.isHost && !this.W.beats[id]) { this.W.beats[id] = this.tc; this.W.rev++; this._dirty = true; } }
+  beat(id) {
+    if (!this.isHost || this.W.beats[id]) return;
+    this.W.beats[id] = this.tc;
+    const b = this.chapter.beats[id];
+    if (b && b.flip) (this.W.flips ||= []).push(this.tc + 0.9); // 이 순간 두 사람의 바다가 뒤바뀐다
+    this.W.rev++; this._dirty = true;
+  }
   bothPast(x) { return this.other.present && this.me.x > x && this.other.x > x && this.me.ground && this.other.ground && this.me.state === 'play' && this.other.state === 'play'; }
   bothIn(x0, x1) { return this.bothPast(x0) && this.me.x < x1 && this.other.x < x1; }
 
@@ -168,8 +193,9 @@ export class Game {
   restore(room) {
     try {
       const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
-      if (!s || s.room !== room || s.role !== this.role || Date.now() - s.at > 6 * 3600e3 || !s.W || s.W.ch !== this.chapter.id) return false;
+      if (!s || s.room !== room || s.role !== this.role || Date.now() - s.at > 6 * 3600e3 || !s.W) return false;
       if (s.W.phase === 'lobby') return false;
+      if (s.W.ch !== this.chapter.id) this.setChapter(s.W.ch);
       this.W = s.W;
       for (const p of this.chapter.puzzles) if (!this.W.pz[p.id]) this.W.pz[p.id] = p.init();
       this._placeAt(s.cp || 0);
@@ -272,6 +298,9 @@ export class Game {
     out.length = 0;
     for (const s of this.chapter.solids) out.push(s);
     for (const p of this.chapter.puzzles) p.solids(this, out);
+    // 목말: 가만히 서 있는 짝의 머리 위에 올라설 수 있다
+    const o = this.other;
+    if (this.chapter.stack && o.present && o.state === 'play' && o.ground && Math.abs(o.vx) < 1.5) out.push({ x: o.x - 0.36, y: o.y + 0.8, w: 0.72, h: 0.12, oneWay: true, head: true });
     return out;
   }
 
@@ -285,7 +314,10 @@ export class Game {
     if (other.present && other.state === 'play' && me.state === 'play') { lim.min = Math.max(lim.min, Math.min(other.x - leash, me.x)); lim.max = Math.min(lim.max, Math.max(other.x + leash, me.x)); }
     this.leash = leash;
     const pinp = this.uiBusy ? { x: inp.x, jump: false, jumpPressed: false } : (first ? inp : { x: inp.x, jump: inp.jump, jumpPressed: false });
-    me.update(dt, pinp, solids, lim);
+    // 실 당기기: 내가 단추를 누르고 있으면 짝이 내 쪽으로 끌려오고, 짝이 누르고 있으면 내가 끌려간다
+    me.pulling = !!(ch.pull && inp.pull && me.ground && me.state === 'play' && other.present);
+    const ext = ch.pull && other.pulling && other.state === 'play' && !me.pulling ? { pullTo: { x: other.x, y: other.y } } : null;
+    me.update(dt, pinp, solids, lim, ext);
     if (me.jumped) { this.sound('jump', { x: me.x }); this.fx.burst('dust', me.x, me.y + 0.05, this.q.sparks(4), { speed: 0.8, spread: Math.PI, color: '#cfe9ff', life: 0.4, size: 0.1 }); }
     if (me.popped) { me.popped = false; this.fx.ring(me.x, me.y + 0.6, '#dff7ff', 0.9, 0.4); this.fx.burst('spark', me.x, me.y + 0.6, this.q.sparks(8), { speed: 2.2, color: '#dff7ff', life: 0.45 }); this.sound('pop', { x: me.x }); }
     if (me.state === 'play' && me.y < ch.waterKill) this.failMe('water');
@@ -315,7 +347,7 @@ export class Game {
     if (this.isHost && this.W.phase === 'play') {
       for (const p of ch.puzzles) if (p.hostTick && p.hostTick(this, this.W.pz[p.id])) { this.W.rev++; this._dirty = true; }
       for (const id of Object.keys(ch.beats)) { const b = ch.beats[id]; if (b.when && !this.W.beats[id] && b.when(this)) this.beat(id); }
-      if (!this.W.end && this.W.pz.duo && this.W.pz.duo.open && ch.end.when(this)) { this.W.end = this.tc; this.W.rev++; this._dirty = true; }
+      if (!this.W.end && ch.end.when(this)) { this.W.end = this.tc; if (ch.end.flip) (this.W.flips ||= []).push(this.tc + 3.2); this.W.rev++; this._dirty = true; }
     }
     this._beats(dt);
     this._ending(dt);
@@ -327,7 +359,7 @@ export class Game {
     this.emote('call');
   }
 
-  // 퍼즐을 풀었을 때의 짧은 축하 연출 (두 폰이 같은 시각에 같은 장면)
+  // 퍼즐을 풀었을 때의 짧은 축하 (폴짝 + 오로라). 껴안기는 장의 끝에서만 한다.
   _beats(dt) {
     const tc = this.tc, me = this.me, other = this.other;
     let active = null;
@@ -338,7 +370,7 @@ export class Game {
       if (!this.seenBeats.has(id)) {
         this.seenBeats.add(id);
         this.surgeT = 1;
-        me.anim.setExpr('happy', 2.4); other.anim.setExpr('happy', 2.4);
+        me.anim.setExpr('happy', 1.8); other.anim.setExpr('happy', 1.8);
         if (me.ground && me.state === 'play') { me.vy = 8.5; me.ground = false; }
         this.sound('success');
         for (const c of [me, other]) this.fx.burst('spark', c.x, c.y + 0.8, this.q.sparks(14), { speed: 3, up: 1.2, color: [this.pal.raw('glow'), '#ffffff', this.pal.raw('warm')], life: 0.9, size: 0.08 });
@@ -346,35 +378,30 @@ export class Game {
       active = { id, b, u };
     }
     this.beatNow = active;
-    if (!active || this.W.end) { if (!this.W.end && me.state === 'cine') { me.state = 'play'; me.walkTo = null; } if (!this.W.end) { me.anim.leanTarget = this._nuzzle(dt); } return; }
-    const { b, u } = active;
-    const near = other.present && Math.abs(other.x - me.x) < 7.5 && Math.abs(other.y - me.y) < 0.6;
-    const t0 = b.focus != null ? 1.5 : 0.45;
-    if (u > t0 && u < b.dur - 0.5 && near && me.state !== 'bubble' && other.state !== 'bubble') {
-      if (me.ground || me.state === 'cine') {
-        me.state = 'cine';
-        const mid = (me.x + other.x) / 2, left = me.x < other.x || (me.x === other.x && this.role === 0);
-        if (this._cineMid == null) this._cineMid = mid;
-        me.walkTo = this._cineMid + (left ? -0.47 : 0.47);
-        if (Math.abs(me.x - me.walkTo) < 0.1) { me.face = left ? 1 : -1; me.walkTo = null; }
-      }
-      const together = Math.abs(other.x - me.x) < 1.15;
-      me.anim.leanTarget = together ? (me.x < other.x ? 1 : -1) : 0;
-      if (together) this._hearts(dt);
-    } else {
-      if (me.state === 'cine') { me.state = 'play'; me.walkTo = null; }
-      me.anim.leanTarget = 0;
-      if (u >= b.dur - 0.5) this._cineMid = null;
+    if (!this.W.end) { if (me.state === 'cine') { me.state = 'play'; me.walkTo = null; } me.anim.leanTarget = this._nuzzle(dt); }
+    // 바다가 뒤바뀌는 순간: 소리와 놀란 표정
+    let n = 0; for (const t of this.W.flips || []) if (tc >= t) n++;
+    if (n > (this._flipSeen || 0)) {
+      const fresh = tc - this.W.flips[n - 1] < 2;
+      this._flipSeen = n;
+      if (fresh) { this.sound('swap'); this.surgeT = 1; this._wowAt = this.t + 0.7; }
     }
-    if (u < t0) this._cineMid = null;
+    if (this._wowAt && this.t >= this._wowAt) { this._wowAt = 0; this.sound('wow', { rate: this.role ? 1.12 : 0.94 }); me.anim.setExpr('wow', 2.0); other.anim.setExpr('wow', 2.0); me.anim.sq.kick(2.4); }
   }
 
-  // 가만히 붙어 있으면 스르르 기댄다
+  // 한참 가만히 붙어 있을 때만, 가끔 스르르 기댄다
   _nuzzle(dt) {
     const me = this.me, o = this.other;
     const close = o.present && me.ground && o.ground && Math.abs(me.vx) < 0.3 && Math.abs(o.vx) < 0.3 && Math.abs(o.x - me.x) < 1.12 && Math.abs(o.x - me.x) > 0.55 && Math.abs(o.y - me.y) < 0.3 && me.state === 'play' && o.state === 'play';
     this.nuzzleT = close ? this.nuzzleT + dt : 0;
-    if (this.nuzzleT > 0.7) { if (this.nuzzleT - dt <= 0.7) this.sound('nuzzle', { x: me.x }); this._hearts(dt); me.face = o.x > me.x ? 1 : -1; return o.x > me.x ? 1 : -1; }
+    const start = 2.6, len = 2.2;
+    if (close && this.nuzzleT > start && this.nuzzleT < start + len && this.t > (this.nuzzleRest || 0)) {
+      if (this.nuzzleT - dt <= start) this.sound('nuzzle', { x: me.x });
+      this._hearts(dt); me.face = o.x > me.x ? 1 : -1;
+      this._nuzzling = true;
+      return o.x > me.x ? 1 : -1;
+    }
+    if (this._nuzzling) { this._nuzzling = false; this.nuzzleRest = this.t + 40; } // 한 번 기대면 한동안은 쉰다
     return 0;
   }
   _hearts(dt) {
@@ -382,33 +409,32 @@ export class Game {
     if (this.heartT <= 0) { this.heartT = 0.55; this.fx.heart((this.me.x + this.other.x) / 2 + (Math.random() - 0.5) * 0.5, Math.max(this.me.y, this.other.y) + 1.45, Math.random() < 0.5 ? '#ff9db8' : '#ffc2d6'); }
   }
 
-  // 엔딩: 달문 앞에서 만나고, 두 사람의 화면이 서로 뒤바뀐다 (2장 예고)
+  // 장의 끝: 달문 앞에서 만나 꼭 붙는다. 장에 따라 여기서 바다가 뒤바뀐다.
   _ending(dt) {
     if (!this.W.end) return;
-    const u = this.tc - this.W.end, me = this.me, o = this.other, spots = this.chapter.end.spots;
+    const u = this.tc - this.W.end, me = this.me, o = this.other, e = this.chapter.end, spots = e.spots;
+    const cardAt = e.flip ? 6.6 : this.chapter.final ? 6.2 : 4.8;
     this.endU = u;
-    if (!this._endSeen) { this._endSeen = true; this.sound('success', { rate: 0.84 }); if (u > 9) { this.card.end = 1; } }
+    if (!this._endSeen) { this._endSeen = true; this.sound('success', { rate: 0.84 }); if (u > cardAt + 3) this.card.end = 1; }
     this.input.locked = true;
     if (me.state !== 'bubble') {
       me.state = 'cine';
       const sx = spots[this.role];
       if (u < 2.4) me.walkTo = sx; else me.walkTo = null;
-      if (u >= 1.2 && Math.abs(me.x - sx) < 0.15) me.face = this.role === 0 ? 1 : -1;
+      if (u >= 1.2 && Math.abs(me.x - sx) < 0.15 && !(e.flip && u > 3.9 && u < 6.4)) me.face = this.role === 0 ? 1 : -1;
     }
     const together = Math.abs(o.x - me.x) < 1.25;
-    me.anim.leanTarget = u > 1.6 && u < 3.5 && together ? (this.role === 0 ? 1 : -1) : 0;
-    if (u > 1.6 && u < 3.4 && together) this._hearts(dt);
-    if (u > 1.5 && u < 3.3) this.surgeT = 1;
-    // 뒤바뀌는 순간
-    if (u >= 3.2 && !this._swapSound) { this._swapSound = true; this.sound('swap'); }
-    if (u > 3.9 && u < 6.4) {
-      if (!this._wow) { this._wow = true; this.sound('wow', { rate: this.role ? 1.12 : 0.94 }); me.anim.setExpr('wow', 2.2); o.anim.setExpr('wow', 2.2); me.anim.sq.kick(2.4); }
-      // 어리둥절해서 두리번
-      me.face = Math.sin((u - 3.9) * 4.2) > 0 ? 1 : -1;
-    } else if (u >= 6.4 && u < 6.6) me.face = this.role === 0 ? 1 : -1;
-    if (u > 6.6) { this.card.end = Math.min(1, this.card.end + dt * 0.8); if (!this._endUi) { this._endUi = true; this.ui.onEnd(true, this.isHost); } }
+    const hugEnd = this.chapter.final ? 5.6 : 3.5;
+    me.anim.leanTarget = u > 1.6 && u < hugEnd && together ? (this.role === 0 ? 1 : -1) : 0;
+    if (u > 1.6 && u < hugEnd && together) this._hearts(dt);
+    if (u > 1.5 && u < (this.chapter.final ? 6 : 3.3)) this.surgeT = 1;
+    if (e.flip && u > 3.9 && u < 6.4) me.face = Math.sin((u - 3.9) * 4.2) > 0 ? 1 : -1; // 어리둥절해서 두리번
+    if (u > cardAt) {
+      this.card.end = Math.min(1, this.card.end + dt * 0.8);
+      if (!this._endUi) { this._endUi = true; saveProgress(this.chapter.id); this.ui.onEnd(true, this.chapter); }
+    }
   }
-  _endReset() { this._endSeen = this._swapSound = this._wow = this._endUi = false; this.endU = 0; }
+  _endReset() { this._endSeen = this._endUi = false; this.endU = 0; }
 
   _animate(dt) {
     const me = this.me, o = this.other;
@@ -423,6 +449,8 @@ export class Game {
     // 짝도 같은 규칙으로 기댄다 (각자 화면에서 계산)
     const myLean = me.anim.leanTarget;
     o.anim.leanTarget = myLean !== 0 ? -myLean : 0;
+    // 짝이 내 머리 위에 올라서 있으면 꾹 눌린다
+    for (const [low, high] of [[me, o], [o, me]]) { const on = o.present && Math.abs(high.x - low.x) < 0.5 && high.y - low.y > 0.6 && high.y - low.y < 1.05 && low.ground; if (on) { low.anim.sq.target = -0.09; if (low.anim.exprT <= 0) low.anim.setExpr('effort', 0.3); } }
     me.anim.update(dt, { vx: me.vx, vy: me.vy, ground: me.ground, face: me.face, state: me.state, partnerDx: o.present ? o.x - me.x : 0 });
     if (o.present) o.anim.update(dt, { vx: o.vx, vy: o.vy, ground: o.ground, face: o.face, state: o.state, partnerDx: me.x - o.x });
     for (const c of [me, o]) {
@@ -439,7 +467,7 @@ export class Game {
     // 글자 카드
     if (this.card.title > 0) { this.card.title += dt; if (this.card.title > 5.2) this.card.title = 0; }
     // 화면 위아래 검은 띠(연출 때)
-    const cine = (this.beatNow && this.beatNow.u < this.beatNow.b.dur - 0.4) || (this.W.end > 0);
+    const cine = (this.beatNow && (this.beatNow.b.focus != null || this.beatNow.b.flip) && this.beatNow.u < this.beatNow.b.dur - 0.4) || (this.W.end > 0);
     this.letter = damp(this.letter, cine ? 1 : 0, 5, dt);
     // 세계 색: 뒤바뀜
     const targetK = this.viewRole;
@@ -464,12 +492,8 @@ export class Game {
     const s0 = Math.min(v.H / VH, v.W / 17); // 좁은 화면(태블릿 등)에서도 가로로 17칸은 보이게
     let zoomT = 1, tx = o.present ? lerp(me.x, o.x, 0.4) : me.x;
     tx += me.face * 0.5;
-    if (this.beatNow) {
-      const { b, u } = this.beatNow;
-      if (b.focus != null && u > 0.15 && u < 1.5) tx = lerp(tx, b.focus, 0.75);
-      else if (u < b.dur - 0.5) { zoomT = 1.1; tx = o.present ? (me.x + o.x) / 2 : me.x; }
-    }
-    if (this.W.end) { const u = this.tc - this.W.end; tx = 124.5; zoomT = u < 3.2 ? 1.14 : u < 6.6 ? 1.0 : 0.94; }
+    if (this.beatNow) { const { b, u } = this.beatNow; if (b.focus != null && u > 0.15 && u < 1.7) tx = lerp(tx, b.focus, 0.75); }
+    if (this.W.end) { const u = this.tc - this.W.end; tx = this.chapter.end.camX; zoomT = u < 3.2 ? 1.14 : u < 6.6 ? 1.0 : 0.94; }
     c.zoom = damp(c.zoom, zoomT, 2.4, dt);
     const s = s0 * c.zoom, halfW = v.W / s / 2;
     // 내 고양이는 항상 화면 안쪽에
@@ -478,7 +502,8 @@ export class Game {
     tx = Math.min(tx, b.max - halfW + 2.2);
     tx = Math.max(tx, b.min + halfW - 1.4);
     c.x = Math.abs(tx - c.x) > 30 ? tx : damp(c.x, tx, 3.6, dt);
-    const ty = CAM_Y / c.zoom + clamp((Math.max(me.y, 0) - 0) * 0.22, 0, 1.2) + (c.zoom > 1 ? 0.15 : 0);
+    const avgY = Math.max(0, o.present && o.state === 'play' ? (me.y + o.y) / 2 : me.y); // 높은 곳에 오르면 화면도 따라 올라간다
+    const ty = CAM_Y / c.zoom + clamp(avgY * 0.72, 0, 4.2) + (c.zoom > 1 ? 0.15 : 0);
     c.y = damp(c.y, ty, 3, dt);
     v.s = s; v.cx = c.x; v.cy = c.y; v.zoom = c.zoom;
     v.left = c.x - halfW; v.right = c.x + halfW;
@@ -490,10 +515,12 @@ export class Game {
   draw() {
     const { ctx, view: v, bg } = this;
     const pal = this.pal || palette(this.role);
-    const endU = this.W.end ? this.tc - this.W.end : -1;
-    // 배경(오로라 바다)
+    // 바다가 뒤바뀌는 중이면 빛줄기가 화면을 쓸고 지나간다
+    const tcNow = this.tc, base = this.role ^ (this.chapter.swap ? 1 : 0), flips = this.W.flips || [];
+    let wipeU = -1, palNow = base;
+    flips.forEach((t, i) => { const u = (tcNow - t) / 1.3; if (u >= 0 && u < 1.15) { wipeU = u; palNow = base ^ (i & 1); } else if (u >= 1.15) palNow = base ^ ((i + 1) & 1); });
     bg.u.time = this.t; bg.u.camX = v.cx; bg.u.camY = v.cy - CAM_Y; bg.u.surge = this.surge;
-    bg.u.pal = this.role; bg.u.wipe = endU >= 3.2 ? sat((endU - 3.2) / 1.3) : 0; bg.u.horizon = v.horizon;
+    bg.u.pal = palNow; bg.u.wipe = wipeU >= 0 ? sat(wipeU) : 0; bg.u.horizon = v.horizon;
     bg.u.fade = 0;
     bg.draw(this.q.bgSkip);
 
@@ -514,8 +541,9 @@ export class Game {
     // 빛의 실과 고양이들
     const me = this.me, o = this.other;
     if (o.present) {
-      const d = Math.abs(o.x - me.x), tension = sat((d - this.leash * 0.55) / (this.leash * 0.45));
+      const d = Math.abs(o.x - me.x), tension = me.pulling || o.pulling ? 1 : sat((d - this.leash * 0.55) / (this.leash * 0.45));
       drawThread(ctx, me.x, -(me.y + 0.5), o.x, -(o.y + 0.5), pal, this.t, tension);
+      if (me.pulling || o.pulling) { const u = (this.t * 2.2) % 1, from = me.pulling ? o : me, to = me.pulling ? me : o; this.fx.add({ kind: 'spark', x: lerp(from.x, to.x, u), y: lerp(from.y, to.y, u) + 0.5, life: 0.25, size: 0.07, color: pal.raw('thread') }); }
     }
     const cats = o.present ? [o, me] : [me];
     for (const c of cats) {
@@ -534,8 +562,9 @@ export class Game {
 
     // --- 화면 고정 요소 ---
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    if (endU >= 3.2 && endU < 4.7) { // 뒤바뀜의 빛줄기
-      const wu = (endU - 3.2) / 1.3, x = (wu * 1.5 - 0.25) * v.W;
+    this._darkness(ctx);
+    if (wipeU >= 0) { // 뒤바뀜의 빛줄기
+      const x = (wipeU * 1.5 - 0.25) * v.W;
       const g = ctx.createLinearGradient(x - v.W * 0.16, 0, x + v.W * 0.05, 0);
       g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.75, 'rgba(255,255,255,0.55)'); g.addColorStop(1, 'rgba(255,255,255,0)');
       ctx.fillStyle = g; ctx.fillRect(x - v.W * 0.16, 0, v.W * 0.21, v.H);
@@ -543,6 +572,25 @@ export class Game {
     if (this.letter > 0.01) { const h = v.H * 0.085 * this.letter; ctx.fillStyle = '#02040c'; ctx.fillRect(0, 0, v.W, h); ctx.fillRect(0, v.H - h, v.W, h); }
     for (const p of this.chapter.puzzles) p.draw(this, ctx, 'ui');
     this._cards(ctx);
+  }
+
+  // 어둠의 구간: 내 주변은 캄캄하고 짝의 주변만 보인다 (내 고양이만은 희미하게 보인다)
+  _darkness(ctx) {
+    const d = this.chapter.dark; if (!d) return;
+    const v = this.view, me = this.me, o = this.other;
+    const a = smoothstep(d.x0 - 2, d.x0 + 3, v.cx) * (1 - smoothstep(d.x1 - 3, d.x1 + 2, v.cx));
+    if (a < 0.01) return;
+    const c = o.present ? o : me;
+    const sx = v.W / 2 + (c.x - v.cx) * v.s, sy = v.H / 2 - (c.y + 0.6 - v.cy) * v.s;
+    const g = ctx.createRadialGradient(sx, sy, v.s * 1.9, sx, sy, v.s * 3.5);
+    g.addColorStop(0, 'rgba(2,4,12,0)'); g.addColorStop(1, `rgba(2,4,12,${0.975 * a})`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, v.W, v.H);
+    // 내 고양이는 어둠 위에 다시 그린다 (어디 있는지는 알아야 하니까)
+    ctx.save();
+    ctx.setTransform(v.s, 0, 0, v.s, v.W / 2 - v.cx * v.s, v.H / 2 + v.cy * v.s);
+    ctx.globalAlpha = 0.5 + 0.5 * (1 - a);
+    ctx.translate(me.x, -me.y); drawCat(ctx, me.anim, LOOKS[me.role], {});
+    ctx.restore();
   }
 
   _groundBelow(c) {
@@ -585,7 +633,7 @@ export class Game {
     if (this.card.end > 0) {
       const a = this.card.end;
       ctx.globalAlpha = a * 0.55; ctx.fillStyle = '#02040c'; ctx.fillRect(0, 0, v.W, v.H);
-      ctx.globalAlpha = a; ctx.fillStyle = '#ffffff'; ctx.shadowColor = this.role ? 'rgba(160,255,220,0.9)' : 'rgba(240,170,255,0.9)'; ctx.shadowBlur = v.H * 0.035;
+      ctx.globalAlpha = a; ctx.fillStyle = '#ffffff'; ctx.shadowColor = this.viewRole ? 'rgba(240,170,255,0.9)' : 'rgba(160,255,220,0.9)'; ctx.shadowBlur = v.H * 0.035;
       ctx.font = font(v.H * 0.09, 200); spaced(ch.endTitle, v.W / 2, v.H * 0.27, v.H * 0.03);
       ctx.shadowBlur = 0; ctx.font = font(v.H * 0.045, 300); ctx.globalAlpha = a * 0.9; spaced(ch.endLine, v.W / 2, v.H * 0.4, v.H * 0.01);
       ctx.globalAlpha = a * 0.6; ctx.font = font(v.H * 0.036, 300); spaced(ch.endNext, v.W / 2, v.H * 0.49, v.H * 0.012);
@@ -595,26 +643,14 @@ export class Game {
 
   // ---------- 테스트·진단용: 지금 "이 화면에서 보이는 것"만 알려준다 ----------
   info() {
-    const W = this.W, r = this.viewRole, ch = this.chapter;
-    const byId = (id) => ch.puzzles.find((p) => p.id === id);
-    const sees = {};
-    if (r === 0) {
-      for (const id of ['tease', 'br1', 'br2']) sees[id] = byId(id).fakes(W.pz[id].seed).slice();
-      sees.gate = byId('gate').code(W.pz.gate.seed).slice();
-      sees.duoPartner = byId('duo').answer(W.pz.duo.seed)[1]; // 짝(2P)이 눌러야 할 기둥
-    } else {
-      const hall = byId('hall');
-      sees.vents = hall.vents.map((v2) => { const p = hall.ventPhase(v2, this.tc); return { x: v2.x, w: v2.w, active: p.active, warn: p.warn || 0 }; });
-      sees.waves = hall.waves(this.tc).map((w) => w.x);
-      sees.duoPartner = byId('duo').answer(W.pz.duo.seed)[0]; // 짝(1P)이 눌러야 할 기둥
-      sees.panel = byId('gate').panel.open ? byId('gate').panel.dials.slice() : null;
-    }
+    const W = this.W, pz = {};
+    for (const p of this.chapter.puzzles) if (p.peek) pz[p.id] = p.peek(this);
     return {
-      role: this.role, viewRole: r, phase: W.phase, rev: W.rev, tc: this.tc, paused: this.paused,
+      ch: this.chapter.id, role: this.role, viewRole: this.viewRole, phase: W.phase, rev: W.rev, tc: this.tc, paused: this.paused,
       me: { x: this.me.x, y: this.me.y, ground: this.me.ground, state: this.me.state, cp: this.me.cp },
       other: { present: this.other.present, x: this.other.x, y: this.other.y, state: this.other.state },
       link: this.link ? { status: this.link.status, mode: this.link.mode, rtt: Math.round(this.link.rtt), kind: this.link.ch && this.link.ch.kind } : null,
-      beats: W.beats, end: W.end, gateOpen: W.pz.gate.open, duoOpen: W.pz.duo.open, sees,
+      beats: W.beats, flips: W.flips, end: W.end, pz,
       fps: this.perf.fps, tier: this.perf.tier, frameMs: Math.round(this.perf.ema * 10) / 10, card: this.card,
     };
   }

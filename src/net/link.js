@@ -161,17 +161,27 @@ export class Link {
     return this._raw({ t: type, d: data }, reliable);
   }
 
+  // ---------- 목소리 ----------
+  // 마이크 소리 한 줄(track)을 짝에게 보낸다. null이면 그만 보낸다. 직접 연결일 때만 실제로 전달된다.
+  get canVoice() { return this.mode === 'p2p' && !!this.txA; }
+  async setMic(track) {
+    this.micTrack = track || null;
+    if (this.txA) { try { await this.txA.sender.replaceTrack(this.micTrack); } catch (e) { /* 연결이 바뀌는 중이면 다음 연결에서 다시 싣는다 */ } }
+    this.send('mic', { on: !!track });
+  }
+
   // ---------- 폰끼리 직접 연결 (WebRTC) ----------
   _dropRtc() {
-    const pc = this.pc; this.pc = null; this.dcR = null; this.dcU = null;
+    const pc = this.pc; this.pc = null; this.dcR = null; this.dcU = null; this.txA = null;
     clearTimeout(this._rtcTimer);
-    if (pc) { pc.onicecandidate = pc.ondatachannel = pc.onconnectionstatechange = null; try { pc.close(); } catch (e) { /* 이미 닫힘 */ } }
+    if (pc) { pc.onicecandidate = pc.ondatachannel = pc.onconnectionstatechange = pc.ontrack = null; try { pc.close(); } catch (e) { /* 이미 닫힘 */ } }
   }
   _newPc() {
     const pc = new RTCPeerConnection({ iceServers: this.opts.noStun ? [] : ICE });
     this.pc = pc;
     this.pendingIce = [];
     pc.onicecandidate = (e) => { if (e.candidate && this.pc === pc) this.ch.send({ f: this.id, t: 'sig', d: { ice: e.candidate } }); };
+    pc.ontrack = (e) => { if (this.pc === pc && e.track.kind === 'audio') this._emit('voice', e.streams[0] || new MediaStream([e.track])); };
     pc.onconnectionstatechange = () => {
       if (this.pc !== pc) return;
       if (pc.connectionState === 'failed' || pc.connectionState === 'closed') { this._dropRtc(); this._setMode('relay'); this._rtcRetryAt = performance.now() + 15000; }
@@ -184,6 +194,7 @@ export class Link {
       if (this.dcR && this.dcU && this.dcR.readyState === 'open' && this.dcU.readyState === 'open') {
         clearTimeout(this._rtcTimer);
         this._setMode('p2p');
+        if (this.micTrack) this.send('mic', { on: true }); // 다시 이어졌을 때 내 마이크 상태를 알려 준다
       }
     };
     dc.onclose = () => { if (this.mode === 'p2p' && (dc === this.dcR || dc === this.dcU)) { this._dropRtc(); this._setMode('relay'); this._rtcRetryAt = performance.now() + 5000; } };
@@ -197,6 +208,8 @@ export class Link {
       this.dcR = pc.createDataChannel('ev', { ordered: true });
       this.dcU = pc.createDataChannel('st', { ordered: false, maxRetransmits: 0 });
       this._wire(this.dcR); this._wire(this.dcU);
+      // 목소리가 지나갈 길을 처음부터 열어 둔다 (마이크를 켜기 전에는 아무 소리도 안 보낸다)
+      try { this.txA = pc.addTransceiver('audio', { direction: 'sendrecv' }); if (this.micTrack) await this.txA.sender.replaceTrack(this.micTrack); } catch (e) { this.txA = null; }
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       if (this.pc !== pc) return;
@@ -216,6 +229,7 @@ export class Link {
           if (e.channel.readyState === 'open') e.channel.onopen();
         };
         await pc.setRemoteDescription(d.sdp);
+        try { const tx = pc.getTransceivers().find((t) => t.receiver && t.receiver.track && t.receiver.track.kind === 'audio'); if (tx) { tx.direction = 'sendrecv'; this.txA = tx; if (this.micTrack) await tx.sender.replaceTrack(this.micTrack); } } catch (e) { this.txA = null; }
         const ans = await pc.createAnswer();
         await pc.setLocalDescription(ans);
         if (this.pc !== pc) return;

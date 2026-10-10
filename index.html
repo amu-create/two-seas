@@ -24,10 +24,14 @@
     <div id="btnR" class="btn"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" /></svg></div>
   </div>
   <div id="btnAct" class="btn"><svg viewBox="0 0 24 24" class="fill"><ellipse cx="12" cy="15.4" rx="5" ry="4.1"/><ellipse cx="5.6" cy="10.4" rx="1.9" ry="2.5"/><ellipse cx="9.6" cy="6.6" rx="1.9" ry="2.5"/><ellipse cx="14.4" cy="6.6" rx="1.9" ry="2.5"/><ellipse cx="18.4" cy="10.4" rx="1.9" ry="2.5"/></svg></div>
+  <div id="btnPull" class="btn hidden"><svg viewBox="0 0 24 24"><path d="M4 17c4-1 6-5 9-6M13 11l-4-.5M13 11l-1.5 3.8"/><circle cx="18" cy="8" r="3"/></svg></div>
   <div id="btnJump" class="btn"><svg viewBox="0 0 24 24"><path d="M5 15l7-7 7 7" /></svg></div>
   <div id="net"><i></i><i></i><span></span></div>
   <div id="dbg" class="hidden"></div>
 </div>
+<button id="btnMic" class="hidden" data-free aria-label="음성 대화 켜기/끄기"><svg viewBox="0 0 24 24"><rect x="9" y="3.5" width="6" height="10.5" rx="3" class="f"/><path d="M5.5 11.5a6.5 6.5 0 0013 0M12 18v3M9 21h6"/><path class="x" d="M4.5 4.5l15 15"/></svg><i></i></button>
+<audio id="voice" autoplay playsinline></audio>
+<div id="toast" class="off"></div>
 <button id="btnMute" data-free aria-label="소리 켜기/끄기"><svg viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5H4z" class="f"/><path class="w" d="M15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11"/><path class="x" d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
 
 <!-- 시작 화면 -->
@@ -35,6 +39,7 @@
   <div class="panel" id="scrHome">
     <h1>두 개의 바다</h1>
     <p class="sub">폰 두 대 · 둘이서 · 서로 다른 화면</p>
+    <div id="chapters" class="chapters"></div>
     <div class="row">
       <button id="btnCreate" class="big">방 만들기</button>
       <button id="btnJoin" class="big ghost">코드로 들어가기</button>
@@ -80,7 +85,8 @@
 
 <!-- 엔딩 뒤 -->
 <div id="endui" class="hidden" data-free>
-  <button id="btnAgain" class="big ghost">처음부터 다시</button>
+  <button id="btnNext" class="big">다음 장으로</button>
+  <button id="btnAgain" class="big ghost">이 장 다시</button>
 </div>
 
 <!-- 세로로 들었을 때 -->

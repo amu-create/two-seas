@@ -22,6 +22,7 @@ export class GlyphGate {
     }
     return this._code;
   }
+  peek(g) { const st = g.pz(this.id); return { code: this.code(st.seed).slice(), open: st.open, panel: this.panel.open ? this.panel.dials.slice() : null, deviceX: this.deviceX }; }
   isOpen(g) { const st = g.pz(this.id); return st.open > 0; }
   openU(g) { const st = g.pz(this.id); return st.open > 0 ? sat((g.tc - st.open - 0.5) / 1.6) : 0; }
 
@@ -45,7 +46,8 @@ export class GlyphGate {
 
   update(g, dt) {
     const p = this.panel;
-    if (p.open && (!this.canAct(g) || Math.abs(g.me.x - p.at) > 0.4)) p.open = false; // 걸어서 멀어지면 닫힌다
+    // 걸어서 멀어지면 닫힌다 (화면이 잠깐 끊겨 발이 한 프레임 뜬 것으로는 닫히지 않게 0.3초 여유)
+    if (p.open) { p.away = this.canAct(g) ? 0 : (p.away || 0) + dt; if (p.away > 0.3 || Math.abs(g.me.x - p.at) > 0.4) { p.open = false; p.away = 0; } }
     p.u = clamp(p.u + (p.open ? dt : -dt) * 5, 0, 1);
     p.shake.step(dt);
     for (let i = 0; i < 3; i++) p.spin[i] *= Math.exp(-dt * 14);
@@ -91,7 +93,7 @@ export class GlyphGate {
     if (d.code && d.code.length === 3 && d.code.every((v, i) => v === c[i])) {
       st.open = g.tc;
       g.emitFx('glyphOk', { id: this.id });
-      g.beat('p3');
+      g.beat(this.beatId || 'p3');
     } else {
       st.tries++; st.seed += 1 + (st.tries % 3);
       g.emitFx('glyphNo', { id: this.id });

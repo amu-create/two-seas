@@ -15,7 +15,7 @@ export class Input {
     this.padX = 0;
     this.el = {
       pad: root.querySelector('#pad'), l: root.querySelector('#btnL'), r: root.querySelector('#btnR'),
-      jump: root.querySelector('#btnJump'), act: root.querySelector('#btnAct'),
+      jump: root.querySelector('#btnJump'), act: root.querySelector('#btnAct'), pull: root.querySelector('#btnPull'),
     };
     this._bind();
   }
@@ -33,6 +33,7 @@ export class Input {
       if (target.closest('#pad')) return 'pad';
       if (target.closest('#btnJump')) return 'jump';
       if (target.closest('#btnAct')) return 'act';
+      if (target.closest('#btnPull')) return 'pull';
       if (target.closest('[data-free]')) return null;
       return 'tap';
     };
@@ -43,7 +44,8 @@ export class Input {
       this.ptr.set(e.pointerId, { z, x: e.clientX, y: e.clientY, t: performance.now() });
       if (z === 'pad') this._pad(e);
       if (z === 'jump') { this.jumpHeld = true; this.jumpPressed = true; this.el.jump.classList.add('on'); }
-      if (z === 'act') { this.actPressed = true; this.el.act.classList.add('on'); }
+      if (z === 'act') { this.actPressed = true; this.actHeldPtr = true; this.el.act.classList.add('on'); }
+      if (z === 'pull') { this.pullPtr = true; this.el.pull.classList.add('on'); }
       this._buzz(z);
     });
     surface.addEventListener('pointermove', (e) => {
@@ -56,7 +58,8 @@ export class Input {
       this.ptr.delete(e.pointerId);
       if (p.z === 'pad') { this.padX = 0; this._padLights(); }
       if (p.z === 'jump') { this.jumpHeld = [...this.ptr.values()].some((q) => q.z === 'jump'); if (!this.jumpHeld) this.el.jump.classList.remove('on'); }
-      if (p.z === 'act') this.el.act.classList.remove('on');
+      if (p.z === 'act') { this.actHeldPtr = false; this.el.act.classList.remove('on'); }
+      if (p.z === 'pull') { this.pullPtr = false; this.el.pull.classList.remove('on'); }
       if (p.z === 'tap' && performance.now() - p.t < 400 && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 24) this.taps.push({ x: e.clientX, y: e.clientY });
     };
     surface.addEventListener('pointerup', up);
@@ -74,7 +77,7 @@ export class Input {
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
   }
 
-  _buzz(z) { if ((z === 'jump' || z === 'act') && navigator.vibrate) { try { navigator.vibrate(8); } catch (e) { /* 진동 없는 기기 */ } } }
+  _buzz(z) { if ((z === 'jump' || z === 'act' || z === 'pull') && navigator.vibrate) { try { navigator.vibrate(8); } catch (e) { /* 진동 없는 기기 */ } } }
 
   _pad(e) {
     const r = this.el.pad.getBoundingClientRect();
@@ -88,7 +91,7 @@ export class Input {
   }
 
   releaseAll() {
-    this.ptr.clear(); this.keys.clear(); this.padX = 0; this.jumpHeld = false;
+    this.ptr.clear(); this.keys.clear(); this.padX = 0; this.jumpHeld = false; this.actHeldPtr = false; this.pullPtr = false; this.el.pull.classList.remove('on');
     this._padLights(); this.el.jump.classList.remove('on'); this.el.act.classList.remove('on');
   }
 
@@ -106,6 +109,8 @@ export class Input {
       jump: !this.locked && this.jump,
       jumpPressed: !this.locked && this.jumpPressed,
       actPressed: !this.locked && this.actPressed,
+      actHeld: !this.locked && (!!this.actHeldPtr || k.has('KeyE') || k.has('Enter')),   // 꾹 누르고 있기 (승강기 돌리기)
+      pull: !this.locked && (!!this.pullPtr || k.has('KeyQ') || k.has('ShiftLeft')),       // 실 당기기
       taps: this.taps,
     };
     this.jumpPressed = false; this.actPressed = false; this.taps = [];

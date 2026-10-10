@@ -32,7 +32,7 @@ export class Player {
   }
 
   // solids: [{x,y,w,h}] (x,y = 왼쪽 아래 모서리, y는 위로 +)
-  update(dt, inp, solids, limits) {
+  update(dt, inp, solids, limits, ext) {
     this.jumped = false;
     this.safe = Math.max(0, this.safe - dt);
     if (this.emoteT > 0) { this.emoteT -= dt; if (this.emoteT <= 0) this.emote = null; }
@@ -64,6 +64,12 @@ export class Player {
     }
     if (!holdJump && this.vy > P.cutV && !this.ground) this.vy = damp(this.vy, P.cutV, 30, dt);
     this.vy = Math.max(this.vy - P.gravity * dt, -P.maxFall);
+    // 짝이 실을 당기는 중: 짝 쪽으로 둥실 끌려간다 (중력을 이긴다)
+    this.pulled = false;
+    if (ext && ext.pullTo && this.state === 'play') {
+      const dx = ext.pullTo.x - this.x, dy = ext.pullTo.y - this.y, d = Math.hypot(dx, dy);
+      if (d > 1.05) { this.vx = damp(this.vx, dx / d * 6.2, 9, dt); this.vy = damp(this.vy + P.gravity * dt, dy / d * 6.2 + 0.6, 9, dt); this.pulled = true; this.face = dx > 0 ? 1 : -1; }
+    }
 
     // 가로 이동 후 충돌
     let nx = this.x + this.vx * dt;
@@ -73,6 +79,7 @@ export class Player {
     }
     const hw = P.w / 2;
     for (const s of solids) {
+      if (s.oneWay) continue; // 위에서 내려앉을 수만 있는 발판(짝의 머리 등)은 옆에서 막지 않는다
       if (this.y + P.h <= s.y + 0.001 || this.y >= s.y + s.h - 0.001) continue;
       if (nx + hw > s.x && nx - hw < s.x + s.w) {
         // 낮은 턱(0.28칸 이하)은 그냥 올라선다
@@ -90,8 +97,9 @@ export class Player {
     for (const s of solids) {
       if (this.x + hw <= s.x + 0.001 || this.x - hw >= s.x + s.w - 0.001) continue;
       const top = s.y + s.h;
-      if (this.vy <= 0 && this.y >= top - 0.02 && ny <= top) { ny = top; this.vy = 0; grounded = true; }
-      else if (this.vy > 0 && this.y + P.h <= s.y + 0.02 && ny + P.h >= s.y) { ny = s.y - P.h; this.vy = 0; }
+      if (this.vy <= 0 && this.y >= top - 0.02 && ny <= top) { ny = top; this.vy = 0; grounded = true; if (s.vx) this.x += s.vx * dt; }
+      else if (s.carry && this.vy <= 1.5 && this.y < top && this.y > top - 0.45) { ny = top; this.vy = 0; grounded = true; } // 올라오는 승강기가 발밑에서 밀어 올린다
+      else if (!s.oneWay && this.vy > 0 && this.y + P.h <= s.y + 0.02 && ny + P.h >= s.y) { ny = s.y - P.h; this.vy = 0; }
     }
     this.y = ny;
     this.ground = grounded;
@@ -126,7 +134,7 @@ export class Player {
     return [
       Math.round(this.x * 100) / 100, Math.round(this.y * 100) / 100,
       Math.round(this.vx * 10) / 10, Math.round(this.vy * 10) / 10,
-      this.face, this.ground ? 1 : 0, this.state === 'bubble' ? 1 : this.state === 'cine' ? 2 : 0, this.cp,
+      this.face, this.ground ? 1 : 0, this.state === 'bubble' ? 1 : this.state === 'cine' ? 2 : 0, this.cp, (this.pulling ? 1 : 0) | (this.cranking ? 2 : 0),
     ];
   }
 }
@@ -145,7 +153,7 @@ export class RemotePlayer {
     this.jumped = false;
   }
   push(t, s) {
-    const snap = { t, x: s[0], y: s[1], vx: s[2], vy: s[3], face: s[4], ground: !!s[5], st: s[6], cp: s[7] };
+    const snap = { t, x: s[0], y: s[1], vx: s[2], vy: s[3], face: s[4], ground: !!s[5], st: s[6], cp: s[7], fl: s[8] || 0 };
     const b = this.buf;
     if (b.length && t <= b[b.length - 1].t) return; // 늦게 온 옛 소식은 버린다
     b.push(snap);
@@ -177,6 +185,7 @@ export class RemotePlayer {
     this.y = jump ? y : damp(this.y, y, 28, dt);
     this.vx = a.vx; this.vy = a.vy; this.face = a.face; this.ground = a.ground;
     this.state = a.st === 1 ? 'bubble' : a.st === 2 ? 'cine' : 'play';
+    this.pulling = !!(c.fl & 1); this.cranking = !!(c.fl & 2);
     if (wasGround && !this.ground && this.vy > 2 && this.state !== 'bubble') this.jumped = true;
   }
 }

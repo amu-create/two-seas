@@ -38,6 +38,7 @@ export class Planks {
     return f;
   }
 
+  peek(g) { return { fakes: this.fakes(g.pz(this.id).seed).slice() }; }
   tileAt(x) { const i = Math.floor((x - this.x) / this.w); return i >= 0 && i < this.n ? i : -1; }
 
   solids(g, out) {

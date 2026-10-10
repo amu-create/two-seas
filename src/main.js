@@ -1,11 +1,11 @@
 // 시작점: 시작 화면(방 만들기/들어가기) → 연결 → 게임
-import { Game } from './game/game.js';
+import { Game, loadProgress } from './game/game.js';
 import { Input } from './game/input.js';
 import { Background } from './render/bg.js';
 import { AudioBox } from './audio/audio.js';
 import { Link } from './net/link.js';
 import { pickChannel } from './net/channel.js';
-import { makeChapter } from './chapters/index.js';
+import { makeChapter, CHAPTERS, CHAPTER_NAMES } from './chapters/index.js';
 
 const $ = (s) => document.querySelector(s);
 const qs = new URLSearchParams(location.search);
@@ -14,6 +14,43 @@ const SESSION_KEY = 'twoseas.session.v1';
 const audio = new AudioBox();
 const input = new Input(document.body);
 const bg = new Background($('#bg'));
+// ---------- 음성 대화 ----------
+// 마이크 단추를 누른 사람의 목소리만 짝에게 간다. 폰끼리 직접 연결됐을 때만 된다(중계로는 목소리를 못 보낸다).
+let toastT = 0;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.remove('off'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('off'), 3200); }
+const voice = {
+  link: null, stream: null, peerOn: false,
+  attach(l) {
+    this.link = l; this.peerOn = false;
+    l.on('voice', (stream) => { const a = $('#voice'); a.srcObject = stream; const p = a.play(); if (p && p.catch) p.catch(() => {}); });
+    l.on('mic', (d) => { const was = this.peerOn; this.peerOn = !!(d && d.on); if (this.peerOn && !was && !this.stream) toast('짝이 마이크를 켰어요. 나도 켜려면 마이크 단추를 눌러요'); this.refresh(); });
+    if (this.stream) l.setMic(this.stream.getAudioTracks()[0]);
+    this.refresh();
+  },
+  refresh() {
+    const b = $('#btnMic'), l = this.link;
+    b.classList.toggle('hidden', !l || !l.peerId);
+    b.classList.toggle('na', !!l && !l.canVoice && !this.stream);
+    b.classList.toggle('on', !!this.stream);
+    b.classList.toggle('peer', this.peerOn);
+    if (l && l.status === 'ok' && this.stream && this._told !== l.mode) { this._told = l.mode; if (l.mode !== 'p2p') toast('지금은 중계 연결이라 목소리가 전달되지 않아요'); }
+  },
+  async toggle() {
+    const l = this.link; if (!l) return;
+    const a = $('#voice'); const p = a.play(); if (p && p.catch) p.catch(() => {}); // 누른 김에 받는 소리도 깨운다 (아이폰)
+    if (this.stream) { this.stream.getTracks().forEach((t) => t.stop()); this.stream = null; await l.setMic(null); this.refresh(); return; }
+    if (!l.canVoice) { toast('목소리는 두 폰이 직접 연결됐을 때만 돼요. 지금은 중계 연결이라 전화를 함께 써 주세요'); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('이 브라우저에서는 마이크를 쓸 수 없어요'); return; }
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
+      await l.setMic(this.stream.getAudioTracks()[0]);
+      toast(this.peerOn ? '마이크 켜짐' : '마이크 켜짐 · 짝도 마이크 단추를 누르면 서로 들려요');
+    } catch (e) { this.stream = null; toast('마이크 권한이 필요해요. 주소창의 권한 설정에서 마이크를 허용해 주세요'); }
+    this.refresh();
+  },
+};
+$('#btnMic').addEventListener('click', () => voice.toggle());
+
 const ui = {
   onLink(status, mode) {
     const net = $('#net');
@@ -23,10 +60,16 @@ const ui = {
     $('#wait').classList.toggle('hidden', !(playing && status !== 'ok'));
     if (status === 'ok') hideLobby();
     if (status === 'full') { $('#joinStatus').textContent = '방이 가득 찼어요'; }
+    voice.refresh();
   },
-  onEnd(show) { $('#endui').classList.toggle('hidden', !show); $('#hud').classList.toggle('ending', !!show); },
+  onEnd(show, ch) {
+    $('#endui').classList.toggle('hidden', !show); $('#hud').classList.toggle('ending', !!show);
+    if (show) { $('#btnNext').classList.toggle('hidden', !ch || ch.id >= CHAPTERS.length); renderChapters(); }
+  },
+  onChapter(ch) { $('#btnPull').classList.toggle('hidden', !ch.pull); },
 };
-const game = new Game({ canvas: $('#game'), bg, input, audio, chapter: makeChapter(Number(qs.get('ch')) || 1), ui });
+const game = new Game({ canvas: $('#game'), bg, input, audio, chapter: makeChapter(Math.max(1, Math.min(CHAPTERS.length, Number(qs.get('ch')) || loadProgress() + 1))), ui });
+ui.onChapter(game.chapter);
 window.__twoSeas = game; // 테스트·진단용
 if (qs.has('nobg')) bg.ok = false;
 if (qs.has('drawEvery')) game.drawEvery = Number(qs.get('drawEvery')); // 시험용: 그리기만 드문드문 // 시험용: 배경 셰이더 끄기
@@ -105,6 +148,7 @@ async function openRoom(code, isHost, id, resume) {
   announce(id);
   link = new Link({ room: code, id, isHost, opts: linkOpts() });
   game.attach(link, code);
+  voice.attach(link);
   link.on('clash', () => { if (isHost && !link.peerId && game.W.phase === 'lobby') { // 같은 번호의 방이 이미 있다 → 번호를 바꾼다
     createRoom(); } });
   const u = new URL(location.href); u.searchParams.set('room', code); u.searchParams.delete('host');
@@ -118,6 +162,7 @@ async function createRoom(fixed) {
   show('#scrHost');
   $('#code').textContent = code;
   $('#hostStatus').textContent = '짝을 기다리는 중';
+  if (game.chapter.id !== chosen) game.setChapter(chosen);
   await openRoom(code, true, newId(), false);
   showInvite(code);
 }
@@ -158,6 +203,21 @@ function drawQr(text) {
   } catch (e) { c.width = c.height = 10; }
 }
 
+// 장 고르기: 깬 장의 다음 장까지 고를 수 있다 (이 폰에 저장된 진행 상황). 방을 만드는 사람이 고른다.
+let chosen = Math.min(CHAPTERS.length, loadProgress() + 1);
+if (qs.get('ch')) chosen = Math.max(1, Math.min(CHAPTERS.length, Number(qs.get('ch')) || 1));
+function renderChapters() {
+  const box = $('#chapters'), open = qs.has('unlock') ? CHAPTERS.length : Math.min(CHAPTERS.length, loadProgress() + 1);
+  box.innerHTML = '';
+  CHAPTER_NAMES.forEach((name, i) => {
+    const n = i + 1, b = document.createElement('button');
+    b.innerHTML = `<b>${n}</b>${name}`;
+    b.className = (n === chosen ? 'sel' : '') + (n > open ? ' locked' : '');
+    b.addEventListener('click', () => { if (n > open) return; chosen = n; if (!link) game.setChapter(n); renderChapters(); });
+    box.appendChild(b);
+  });
+}
+
 // 숫자판 (가로 화면에서 폰 키보드가 화면을 다 가리지 않게 직접 만든 것)
 let typed = '';
 function renderCode() {
@@ -186,6 +246,7 @@ const goHome = () => { if (link) { link.close(); link = null; } clearTimeout(joi
 $('#backHost').addEventListener('click', goHome);
 $('#backJoin').addEventListener('click', goHome);
 $('#btnAgain').addEventListener('click', () => game.restartChapter());
+$('#btnNext').addEventListener('click', () => game.nextChapter());
 $('#btnMute').addEventListener('click', () => { const m = !audio.muted; audio.setMuted(m); $('#btnMute').classList.toggle('off', m); try { localStorage.setItem('twoseas.mute', m ? '1' : ''); } catch (e) { /* 무시 */ } });
 try { if (localStorage.getItem('twoseas.mute')) { audio.setMuted(true); $('#btnMute').classList.add('off'); } } catch (e) { /* 무시 */ }
 document.addEventListener('pointerdown', () => { if (input.used) $('#hud').classList.remove('first'); });
@@ -203,6 +264,7 @@ setInterval(() => {
 
 // ---------- 시작 ----------
 (async function boot() {
+  renderChapters();
   const want = qs.get('room');
   const ses = loadSession();
   if (qs.has('solo')) { // 개발용: 혼자 둘러보기 (?solo=0 빛 / ?solo=1 그림자, &at=체크포인트)

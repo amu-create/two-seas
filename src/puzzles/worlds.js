@@ -12,6 +12,7 @@
 import { TAU, damp, rgba, easeInOut, roundRect, sat, lerp } from '../util.js';
 import { drawGlyph } from '../render/glyphs.js';
 import { flame, TINT } from './vents.js';
+import { haptics } from '../game/haptics.js';
 
 export class Links {
   constructor(cfg) {
@@ -58,13 +59,13 @@ export class Links {
 
   update(g, dt) {
     const me = g.me;
-    this.keys.forEach((k, i) => { k.sink = damp(k.sink, this.pressed(g, i) ? 1 : 0, 14, dt); });
+    this.keys.forEach((k, i) => { const p = this.pressed(g, i); if (p && !k.was && this.mine(g, k) && this.onKey(g.me, k)) haptics.buzz('key'); k.was = p; k.sink = damp(k.sink, p ? 1 : 0, 14, dt); });
     for (const t of this.things) {
       const on = this.active(g, t), was = t.u > 0.5;
       t.u = damp(t.u, on ? 1 : 0, t.kind === 'riser' ? 2.2 : t.kind === 'bridge' ? 6 : 5, dt);
       if (t.u > 0.5 !== was && t.key != null) {
         const near = this.mine(g, t);
-        if (near) { g.sound(t.kind === 'flame' ? 'press' : t.u > 0.5 ? 'panel' : 'press', { x: t.x }); if (t.kind === 'bridge' && t.u > 0.5) g.fx.burst('spark', t.x + t.w / 2, t.y + 0.1, g.q.sparks(12), { speed: 1.2, up: 0.7, color: g.pal.glow, life: 0.8, size: 0.07, rx: t.w }); }
+        if (near) { haptics.buzz('open'); g.sound(t.kind === 'flame' ? 'press' : t.u > 0.5 ? 'panel' : 'press', { x: t.x }); if (t.kind === 'bridge' && t.u > 0.5) g.fx.burst('spark', t.x + t.w / 2, t.y + 0.1, g.q.sparks(12), { speed: 1.2, up: 0.7, color: g.pal.glow, life: 0.8, size: 0.07, rx: t.w }); }
       }
       if (t.kind === 'flame' && this.mine(g, t) && t.u < 0.5 && me.state === 'play' && me.safe <= 0 &&
         me.x > t.x + 0.12 && me.x < t.x + t.w - 0.12 && me.y < t.y + t.h && me.y + 0.9 > t.y) { this.flash = g.t; g.hazard = this.id; g.failMe('trap'); }

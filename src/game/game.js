@@ -1,5 +1,6 @@
 // 게임 본체: 한 프레임마다 "입력 → 움직임 → 퍼즐 → 연출 → 그리기 → 짝에게 보내기"
 // 규칙의 주인: 내 고양이의 위치는 내 폰이, 세계의 상태(퍼즐 진행)는 방장(1P) 폰이 정한다.
+import { haptics } from './haptics.js';
 import { clamp, lerp, damp, sat, smooth, smoothstep, easeOut, easeInOut, TAU, rgba } from '../util.js';
 import { Player, RemotePlayer, PHYS } from './player.js';
 import { drawCat, drawCatShadow, LOOKS } from '../render/cat.js';
@@ -246,6 +247,8 @@ export class Game {
   sound(name, opt = {}) {
     if (opt.x != null) { const dx = (opt.x - this.view.cx) / ((this.view.right - this.view.left) / 2 || 1); opt.pan = clamp(dx, -1, 1) * 0.7; if (Math.abs(dx) > 1.3) return; }
     this.audio.play(name, opt);
+    // 진동: 화면 전체의 일(뒤바뀜, 성공)이거나 내 고양이 가까이에서 난 소리일 때만
+    if (opt.x == null || Math.abs(opt.x - this.me.x) < 1.6) haptics.bySound(name);
   }
   emote(kind) {
     this._emote(this.me, { k: kind });
@@ -267,7 +270,7 @@ export class Game {
       this.sound('splash', { x: fx });
     } else { this.fx.burst('spark', fx, fy + 0.6, this.q.sparks(10), { speed: 2.4, color: '#ff9fe6', life: 0.5 }); this.sound('zap', { x: fx }); }
     this.sound('oops', { x: fx, rate: this.role ? 1.12 : 0.94 });
-    if (navigator.vibrate) { try { navigator.vibrate(18); } catch (e) { /* 진동 없는 기기 */ } }
+    haptics.buzz('fail', true);
     this.act('fell', { pz: this.hazard, kind });
     this.hazard = null;
   }
@@ -317,6 +320,7 @@ export class Game {
     const pinp = this.uiBusy ? { x: inp.x, jump: false, jumpPressed: false } : (first ? inp : { x: inp.x, jump: inp.jump, jumpPressed: false });
     // 실 당기기: 내가 단추를 누르고 있으면 짝이 내 쪽으로 끌려오고, 짝이 누르고 있으면 내가 끌려간다
     me.pulling = !!(ch.pull && inp.pull && me.ground && me.state === 'play' && other.present);
+    if ((me.pulling || (other.pulling && me.pulled)) && Math.floor(this.t * 7) !== Math.floor((this.t - dt) * 7)) haptics.buzz('pull');
     const ext = ch.pull && other.pulling && other.state === 'play' && !me.pulling ? { pullTo: { x: other.x, y: other.y } } : null;
     me.update(dt, pinp, solids, lim, ext);
     // 목말: 짝의 머리 위에 가만히 서 있으면 짝에게 붙어서 실려 간다 (움직이거나 뛰면 떨어진다)
@@ -326,6 +330,7 @@ export class Game {
       const stick = me.wasRiding && !pinp.x && !inp.jumpPressed && !inp.jump && other.ground && Math.abs(me.x - other.x) < 3;
       me.riding = !!(can && (onHead || stick));
       if (me.riding && !pinp.x) { me.x = Math.abs(me.x - other.x) > 0.5 ? other.x : damp(me.x, other.x, 30, dt); me.y = other.y + 0.92; me.vy = 0; me.vx = 0; me.ground = true; }
+      if (me.riding && !me.wasRiding) haptics.buzz('ride');
       me.wasRiding = me.riding;
     }
     if (me.jumped) { this.sound('jump', { x: me.x }); this.fx.burst('dust', me.x, me.y + 0.05, this.q.sparks(4), { speed: 0.8, spread: Math.PI, color: '#cfe9ff', life: 0.4, size: 0.1 }); }
@@ -425,7 +430,7 @@ export class Game {
     const u = this.tc - this.W.end, me = this.me, o = this.other, e = this.chapter.end, spots = e.spots;
     const cardAt = e.flip ? 6.6 : this.chapter.final ? 6.2 : 4.8;
     this.endU = u;
-    if (!this._endSeen) { this._endSeen = true; this.sound('success', { rate: 0.84 }); if (u > cardAt + 3) this.card.end = 1; }
+    if (!this._endSeen) { this._endSeen = true; haptics.buzz('end', true); this.sound('success', { rate: 0.84 }); if (u > cardAt + 3) this.card.end = 1; }
     this.input.locked = true;
     if (me.state !== 'bubble') {
       me.state = 'cine';
@@ -466,6 +471,7 @@ export class Game {
     for (const c of [me, o]) {
       if (!c.present) continue;
       if (c.anim.footstep) this.sound('step', { x: c.x, vol: c === me ? 0.5 : 0.32 });
+      if (c === me && c.anim.landed > 5) haptics.buzz(c.anim.landed > 13 ? 'thud' : 'land');
       if (c.anim.landed > 5) { this.sound('land', { x: c.x, vol: clamp(c.anim.landed / 16, 0.35, 1) * (c === me ? 1 : 0.7) }); this.fx.burst('dust', c.x, c.y + 0.05, this.q.sparks(5), { speed: 1.2, spread: Math.PI, color: '#cfe9ff', life: 0.45, size: 0.11 }); }
     }
     this.fx.update(dt);

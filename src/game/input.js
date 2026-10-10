@@ -1,3 +1,4 @@
+import { haptics } from './haptics.js';
 // 조작: 왼쪽 엄지 = 좌우, 오른쪽 엄지 = 점프·상호작용. 키보드(PC 테스트용)도 지원.
 // 손가락이 버튼 사이를 미끄러져도 따라가고, 여러 손가락을 동시에 추적한다.
 export class Input {
@@ -77,7 +78,7 @@ export class Input {
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
   }
 
-  _buzz(z) { if ((z === 'jump' || z === 'act' || z === 'pull') && navigator.vibrate) { try { navigator.vibrate(8); } catch (e) { /* 진동 없는 기기 */ } } }
+  _buzz(z) { if (z === 'jump' || z === 'act' || z === 'pull') { haptics.buzz('tap'); return; } if (false) { try { navigator.vibrate(8); } catch (e) { /* 진동 없는 기기 */ } } }
 
   _pad(e) {
     const r = this.el.pad.getBoundingClientRect();

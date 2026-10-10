@@ -4,6 +4,7 @@
 // cfg: { id, x, w, y0, y1, cranks:[{x,y}], up, down }
 import { TAU, clamp, rgba, damp } from '../util.js';
 import { pawHint } from './glyph.js';
+import { haptics } from '../game/haptics.js';
 
 export class Lift {
   constructor(cfg) { Object.assign(this, { up: 1.3, down: 0.7 }, cfg); this.spin = 0; this.sent = false; }
@@ -19,6 +20,7 @@ export class Lift {
     g.me.cranking = on;
     if (on !== this.sent) { this.sent = on; g.act('crank', { id: this.id, on }); }
     const st = g.pz(this.id);
+    { const me = g.me, on = me.ground && me.x > this.x && me.x < this.x + this.w && Math.abs(me.y - this.top(g)) < 0.1 && st.dir !== 0 && this.height(g) > 0.02 && this.height(g) < this.y1 - this.y0 - 0.02; if ((on || g.me.cranking) && Math.floor(g.t * 5) !== Math.floor((g.t - dt) * 5)) haptics.buzz('lift'); } // 타고 있거나 돌리는 동안 톱니 느낌
     if (st.dir > 0) { this.spin += dt * 5; if (Math.floor(this.spin / 1.2) !== Math.floor((this.spin - dt * 5) / 1.2)) g.sound('dial', { x: this.x, vol: 0.6 }); }
     else if (st.dir < 0 && this.height(g) > 0) this.spin -= dt * 2.5;
   }

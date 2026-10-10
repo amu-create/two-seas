@@ -5,6 +5,7 @@
 // cfg: { id, x, y, w, h, min, max }
 import { clamp, damp, rgba, roundRect, TAU } from '../util.js';
 import { PHYS } from '../game/player.js';
+import { haptics } from '../game/haptics.js';
 
 export class Box {
   constructor(cfg) { Object.assign(this, { y: 0, w: 1.3, h: 0.9 }, cfg); this.bx = this.x; this.pushT = -9; this.sentT = -9; this.moving = 0; this.rumble = 0; }
@@ -28,6 +29,7 @@ export class Box {
     }
     this.moving = damp(this.moving, pushed ? 1 : 0, 10, dt);
     if (pushed) { this.rumble += dt; if (this.rumble > 0.34) { this.rumble = 0; g.sound('step', { x: this.bx, vol: 0.5, rate: 0.6 }); } }
+    if (g.t - this.pushT < 0.05) { this.hz = (this.hz || 0) + dt; if (this.hz > 0.16) { this.hz = 0; haptics.buzz('push'); } } // 내가 밀고 있는 동안 드르륵
   }
   host(g, st, from, type, d) { if (type === 'box' && d.id === this.id) { st.x = clamp(+d.x || 0, this.min, this.max); return true; } return false; }
   onFx() {}

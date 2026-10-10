@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>두 개의 바다</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#030a16">
+<meta name="description" content="폰 두 대로 하는 2인 협동 퍼즐. 서로 다른 화면을 보고, 말로 알려줘야 지나갈 수 있어요.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="bg"></canvas>
+<canvas id="game"></canvas>
+
+<!-- 조작 버튼: 왼쪽 엄지 = 좌우, 오른쪽 엄지 = 점프·발바닥(상호작용) -->
+<div id="hud" class="hidden">
+  <div id="pad">
+    <div id="btnL" class="btn"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg></div>
+    <div id="btnR" class="btn"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" /></svg></div>
+  </div>
+  <div id="btnAct" class="btn"><svg viewBox="0 0 24 24" class="fill"><ellipse cx="12" cy="15.4" rx="5" ry="4.1"/><ellipse cx="5.6" cy="10.4" rx="1.9" ry="2.5"/><ellipse cx="9.6" cy="6.6" rx="1.9" ry="2.5"/><ellipse cx="14.4" cy="6.6" rx="1.9" ry="2.5"/><ellipse cx="18.4" cy="10.4" rx="1.9" ry="2.5"/></svg></div>
+  <div id="btnJump" class="btn"><svg viewBox="0 0 24 24"><path d="M5 15l7-7 7 7" /></svg></div>
+  <div id="net"><i></i><i></i><span></span></div>
+  <div id="dbg" class="hidden"></div>
+</div>
+<button id="btnMute" data-free aria-label="소리 켜기/끄기"><svg viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5H4z" class="f"/><path class="w" d="M15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11"/><path class="x" d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
+
+<!-- 시작 화면 -->
+<div id="lobby" data-free>
+  <div class="panel" id="scrHome">
+    <h1>두 개의 바다</h1>
+    <p class="sub">폰 두 대 · 둘이서 · 서로 다른 화면</p>
+    <div class="row">
+      <button id="btnCreate" class="big">방 만들기</button>
+      <button id="btnJoin" class="big ghost">코드로 들어가기</button>
+    </div>
+    <p class="tip">나란히 앉아, 보이는 것을 말로 알려 주세요</p>
+  </div>
+
+  <div class="panel hidden" id="scrHost">
+    <div class="hostgrid">
+      <div class="qrbox"><canvas id="qr" width="10" height="10"></canvas></div>
+      <div class="hostinfo">
+        <p class="label">방 코드</p>
+        <div id="code" class="code">· · · ·</div>
+        <p class="hint">짝의 폰 카메라로 QR을 찍거나<br>이 숫자를 입력하면 들어와요</p>
+        <p class="status"><span class="dots"><i></i><i></i><i></i></span><span id="hostStatus">짝을 기다리는 중</span></p>
+        <p class="tiny" id="hostUrl"></p>
+      </div>
+    </div>
+    <button class="back" id="backHost" aria-label="뒤로">‹</button>
+  </div>
+
+  <div class="panel hidden" id="scrJoin">
+    <div class="joingrid">
+      <div class="joinleft">
+        <p class="label">방 코드 4자리</p>
+        <div id="codeIn" class="code"><b></b><b></b><b></b><b></b></div>
+        <p class="status" id="joinStatus">&nbsp;</p>
+      </div>
+      <div id="keys" class="keys"></div>
+    </div>
+    <button class="back" id="backJoin" aria-label="뒤로">‹</button>
+  </div>
+</div>
+
+<!-- 짝과 끊겼을 때 -->
+<div id="wait" class="hidden">
+  <div class="waitbox">
+    <span class="dots"><i></i><i></i><i></i></span>
+    <p id="waitText">짝을 기다리는 중</p>
+    <p class="tiny" id="waitCode"></p>
+  </div>
+</div>
+
+<!-- 엔딩 뒤 -->
+<div id="endui" class="hidden" data-free>
+  <button id="btnAgain" class="big ghost">처음부터 다시</button>
+</div>
+
+<!-- 세로로 들었을 때 -->
+<div id="rotate">
+  <svg viewBox="0 0 64 64"><rect x="22" y="8" width="20" height="36" rx="4"/><path d="M14 50c6 8 24 10 36 0M50 50l-1-8M50 50l-8 1"/></svg>
+  <p>폰을 가로로 돌려 주세요</p>
+</div>
+
+<script src="vendor/qrcode.js"></script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

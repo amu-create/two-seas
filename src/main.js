@@ -1,0 +1,230 @@
+// 시작점: 시작 화면(방 만들기/들어가기) → 연결 → 게임
+import { Game } from './game/game.js';
+import { Input } from './game/input.js';
+import { Background } from './render/bg.js';
+import { AudioBox } from './audio/audio.js';
+import { Link } from './net/link.js';
+import { pickChannel } from './net/channel.js';
+import { makeChapter } from './chapters/index.js';
+
+const $ = (s) => document.querySelector(s);
+const qs = new URLSearchParams(location.search);
+const SESSION_KEY = 'twoseas.session.v1';
+
+const audio = new AudioBox();
+const input = new Input(document.body);
+const bg = new Background($('#bg'));
+const ui = {
+  onLink(status, mode) {
+    const net = $('#net');
+    net.className = status === 'ok' ? (mode === 'p2p' ? 'p2p' : 'relay') : 'lost';
+    net.querySelector('span').textContent = status === 'ok' ? (mode === 'p2p' ? '직접 연결' : '중계 연결') : '연결 찾는 중';
+    const playing = game.W.phase !== 'lobby';
+    $('#wait').classList.toggle('hidden', !(playing && status !== 'ok'));
+    if (status === 'ok') hideLobby();
+    if (status === 'full') { $('#joinStatus').textContent = '방이 가득 찼어요'; }
+  },
+  onEnd(show) { $('#endui').classList.toggle('hidden', !show); $('#hud').classList.toggle('ending', !!show); },
+};
+const game = new Game({ canvas: $('#game'), bg, input, audio, chapter: makeChapter(Number(qs.get('ch')) || 1), ui });
+window.__twoSeas = game; // 테스트·진단용
+if (qs.has('nobg')) bg.ok = false;
+if (qs.has('drawEvery')) game.drawEvery = Number(qs.get('drawEvery')); // 시험용: 그리기만 드문드문 // 시험용: 배경 셰이더 끄기
+if (qs.has('tier')) { game.lockTier = Number(qs.get('tier')); game.perf.tier = game.lockTier; game._applyTier(); }
+
+let link = null;
+let room = null;
+
+// ---------- 화면 전환 ----------
+function show(id) { for (const s of ['#scrHome', '#scrHost', '#scrJoin']) $(s).classList.toggle('hidden', s !== id); $('#lobby').classList.remove('hidden', 'out'); }
+function hideLobby() {
+  const l = $('#lobby');
+  if (l.classList.contains('out')) return;
+  l.classList.add('out');
+  setTimeout(() => l.classList.add('hidden'), 650);
+  $('#hud').classList.remove('hidden');
+  $('#hud').classList.add('first');
+}
+function firstTouch() {
+  audio.unlock();
+  audio.loop('sea', 0.9);
+  audio.loop('music', 0.8);
+  const el = document.documentElement;
+  // 안드로이드: 전체 화면 + 가로 고정 (아이폰 사파리는 지원하지 않아서 "가로로 돌려 주세요" 안내로 대신한다)
+  const narrow = Math.min(screen.width, screen.height) < 900;
+  if (narrow && el.requestFullscreen && !document.fullscreenElement) el.requestFullscreen({ navigationUI: 'hide' }).then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => {})).catch(() => {});
+  keepAwake();
+}
+let wake = null;
+async function keepAwake() { // 플레이 중 화면이 꺼지지 않게
+  try { if ('wakeLock' in navigator && !wake) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch (e) { /* 지원 안 하는 브라우저 */ }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && link) keepAwake(); });
+let touched = false;
+for (const type of ['pointerup', 'touchend', 'click', 'keydown']) document.addEventListener(type, () => { if (!touched) { touched = true; firstTouch(); } else audio.unlock(); }, { passive: true });
+
+// ---------- 방 ----------
+const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+const newCode = () => String(Math.floor(1000 + Math.random() * 9000));
+function saveSession(s) { try { const j = JSON.stringify(s); sessionStorage.setItem(SESSION_KEY, j); localStorage.setItem(SESSION_KEY, j); } catch (e) { /* 저장 못 해도 진행 */ } }
+function loadSession() {
+  try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { return null; }
+}
+// 같은 브라우저의 다른 탭이 이미 그 자리를 쓰고 있는지 물어본다 (한 PC에서 탭 두 개로 시험할 때 헷갈리지 않게)
+function idInUse(id) {
+  return new Promise((res) => {
+    if (!('BroadcastChannel' in window) || sessionStorage.getItem(SESSION_KEY)) { res(false); return; }
+    const bc = new BroadcastChannel('twoseas'); let done = false;
+    bc.onmessage = (e) => { if (e.data && e.data.have === id && !done) { done = true; bc.close(); res(true); } };
+    bc.postMessage({ ask: id });
+    setTimeout(() => { if (!done) { done = true; bc.close(); res(false); } }, 180);
+  });
+}
+function announce(id) {
+  if (!('BroadcastChannel' in window)) return;
+  const bc = new BroadcastChannel('twoseas');
+  bc.onmessage = (e) => { if (e.data && e.data.ask === id) bc.postMessage({ have: id }); };
+}
+
+function linkOpts() {
+  const o = {};
+  if (qs.get('net')) o.net = qs.get('net');
+  if (qs.get('broker')) o.brokers = [qs.get('broker')];
+  if (qs.get('rtc') === '0') o.rtc = false;
+  if (qs.get('nostun')) o.noStun = true;
+  return o;
+}
+
+async function openRoom(code, isHost, id, resume) {
+  if (link) { link.close(); link = null; }
+  room = code;
+  game.setRole(isHost ? 0 : 1);
+  if (resume) game.restore(code);
+  else game.W = game._freshWorld();
+  saveSession({ room: code, id, host: isHost });
+  announce(id);
+  link = new Link({ room: code, id, isHost, opts: linkOpts() });
+  game.attach(link, code);
+  link.on('clash', () => { if (isHost && !link.peerId && game.W.phase === 'lobby') { // 같은 번호의 방이 이미 있다 → 번호를 바꾼다
+    createRoom(); } });
+  const u = new URL(location.href); u.searchParams.set('room', code); u.searchParams.delete('host');
+  history.replaceState(null, '', u);
+  $('#waitCode').textContent = '방 코드 ' + code;
+  await link.start();
+}
+
+async function createRoom(fixed) {
+  const code = fixed || newCode();
+  show('#scrHost');
+  $('#code').textContent = code;
+  $('#hostStatus').textContent = '짝을 기다리는 중';
+  await openRoom(code, true, newId(), false);
+  showInvite(code);
+}
+// 짝이 찍을 QR과 주소. PC에서 localhost로 열었으면, 폰이 접속할 수 있는 와이파이 주소로 바꿔서 보여준다.
+async function showInvite(code) {
+  if (!pickChannel.info && /^(localhost|127\.)/.test(location.hostname)) { try { pickChannel.info = await (await fetch('relay-info', { cache: 'no-store' })).json(); } catch (e) { /* 중계 서버 없음 */ } }
+  const url = new URL(location.href);
+  url.search = ''; url.searchParams.set('room', code);
+  for (const k of ['net', 'broker', 'rtc', 'nostun']) if (qs.get(k)) url.searchParams.set(k, qs.get(k));
+  const info = pickChannel.info;
+  let note = '';
+  if (/^(localhost|127\.)/.test(url.hostname)) {
+    if (info && info.lan && info.lan.length) url.hostname = info.lan[0];
+    else note = '  ← 폰에서는 이 PC의 와이파이 주소로 열어야 해요';
+  }
+  $('#hostUrl').textContent = url.href.replace(/^https?:\/\//, '') + note;
+  drawQr(url.href);
+}
+
+let joinTimer = null;
+function joinRoom(code, id, resume) {
+  $('#joinStatus').innerHTML = '<span class="dots"><i></i><i></i><i></i></span>방을 찾는 중';
+  clearTimeout(joinTimer);
+  joinTimer = setTimeout(() => { if (link && link.status !== 'ok') $('#joinStatus').textContent = '방을 못 찾았어요. 코드를 다시 확인해 주세요'; }, 9000);
+  openRoom(code, false, id || newId(), resume);
+}
+
+function drawQr(text) {
+  const c = $('#qr');
+  try {
+    const q = window.qrcode(0, 'M'); q.addData(text); q.make();
+    const n = q.getModuleCount(), cell = 6;
+    c.width = c.height = n * cell;
+    const x = c.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+    x.fillStyle = '#081a2c';
+    for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (q.isDark(r, k)) x.fillRect(k * cell, r * cell, cell, cell);
+  } catch (e) { c.width = c.height = 10; }
+}
+
+// 숫자판 (가로 화면에서 폰 키보드가 화면을 다 가리지 않게 직접 만든 것)
+let typed = '';
+function renderCode() {
+  const cells = document.querySelectorAll('#codeIn b');
+  cells.forEach((b, i) => { b.textContent = typed[i] || ''; b.classList.toggle('cur', i === typed.length); });
+}
+function key(k) {
+  if (k === '←') typed = typed.slice(0, -1); else if (typed.length < 4) typed += k;
+  renderCode();
+  if (typed.length === 4) joinRoom(typed);
+  else { clearTimeout(joinTimer); $('#joinStatus').innerHTML = '&nbsp;'; }
+}
+for (const k of ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '←']) {
+  const b = document.createElement('button');
+  if (!k) { b.style.visibility = 'hidden'; } else { b.textContent = k; b.addEventListener('click', () => key(k)); }
+  $('#keys').appendChild(b);
+}
+window.addEventListener('keydown', (e) => {
+  if ($('#scrJoin').classList.contains('hidden') || $('#lobby').classList.contains('hidden')) return;
+  if (/^\d$/.test(e.key)) key(e.key); else if (e.key === 'Backspace') key('←');
+});
+
+$('#btnCreate').addEventListener('click', () => { touched = true; firstTouch(); createRoom(); });
+$('#btnJoin').addEventListener('click', () => { touched = true; firstTouch(); typed = ''; renderCode(); show('#scrJoin'); });
+const goHome = () => { if (link) { link.close(); link = null; } clearTimeout(joinTimer); game.link = null; game.room = null; game.setRole(0); game.W = game._freshWorld(); const u = new URL(location.href); u.searchParams.delete('room'); history.replaceState(null, '', u); show('#scrHome'); };
+$('#backHost').addEventListener('click', goHome);
+$('#backJoin').addEventListener('click', goHome);
+$('#btnAgain').addEventListener('click', () => game.restartChapter());
+$('#btnMute').addEventListener('click', () => { const m = !audio.muted; audio.setMuted(m); $('#btnMute').classList.toggle('off', m); try { localStorage.setItem('twoseas.mute', m ? '1' : ''); } catch (e) { /* 무시 */ } });
+try { if (localStorage.getItem('twoseas.mute')) { audio.setMuted(true); $('#btnMute').classList.add('off'); } } catch (e) { /* 무시 */ }
+document.addEventListener('pointerdown', () => { if (input.used) $('#hud').classList.remove('first'); });
+setInterval(() => { if (input.used) $('#hud').classList.remove('first'); }, 500);
+
+// 진단 표시: 연결 표시(화면 위 가운데)를 세 번 톡톡톡 치면 초당 프레임·화질 단계·지연이 보인다
+let dbgTaps = 0, dbgAt = 0, dbgOn = qs.has('fps');
+$('#net').addEventListener('pointerdown', () => { const n = performance.now(); dbgTaps = n - dbgAt < 600 ? dbgTaps + 1 : 1; dbgAt = n; if (dbgTaps >= 3) { dbgOn = !dbgOn; dbgTaps = 0; $('#dbg').classList.toggle('hidden', !dbgOn); } });
+setInterval(() => {
+  if (!dbgOn) return;
+  $('#dbg').classList.remove('hidden');
+  const p = game.perf, l = game.link;
+  $('#dbg').textContent = `${p.fps} fps · 가장 느린 프레임 ${Math.round(p.worstLast || 0)}ms · 화질 ${4 - p.tier}/4` + (l ? ` · ${l.mode === 'p2p' ? '직접' : '중계'} ${Math.round(l.rtt)}ms` : '');
+}, 500);
+
+// ---------- 시작 ----------
+(async function boot() {
+  const want = qs.get('room');
+  const ses = loadSession();
+  if (qs.has('solo')) { // 개발용: 혼자 둘러보기 (?solo=0 빛 / ?solo=1 그림자, &at=체크포인트)
+    game.setRole(Number(qs.get('solo')) ? 1 : 0);
+    game.W.phase = 'play'; game.W.t0 = performance.timeOrigin + performance.now();
+    if (qs.get('at')) game._placeAt(Number(qs.get('at')));
+    $('#lobby').classList.add('hidden'); $('#hud').classList.remove('hidden');
+  } else if (want && /^\d{4}$/.test(want)) {
+    if (qs.get('host') === '1') createRoom(want);
+    else if (ses && ses.room === want && !(await idInUse(ses.id))) {
+      // 같은 방으로 다시 들어옴: 하던 자리에서 이어서
+      if (ses.host) { show('#scrHost'); $('#code').textContent = want; openRoom(want, true, ses.id, true).then(() => showInvite(want)); if (game.W.phase !== 'lobby') { hideLobby(); $('#wait').classList.remove('hidden'); } }
+      else { show('#scrJoin'); typed = want; renderCode(); joinRoom(want, ses.id, true); if (game.W.phase !== 'lobby') { hideLobby(); $('#wait').classList.remove('hidden'); } }
+    } else { show('#scrJoin'); typed = want; renderCode(); joinRoom(want); }
+  } else show('#scrHome');
+
+  let last = performance.now();
+  const loop = (now) => {
+    const ms = Math.max(0, now - last); last = now;
+    game._perf(ms);
+    game.frameStep(ms / 1000);
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+})();

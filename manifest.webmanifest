@@ -1,0 +1,10 @@
+{
+  "name": "두 개의 바다",
+  "short_name": "두 개의 바다",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#030a16",
+  "theme_color": "#030a16",
+  "start_url": "./",
+  "icons": [{ "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

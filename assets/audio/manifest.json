@@ -1,0 +1,174 @@
+{
+ "sea": {
+  "files": [
+   "sea.mp3"
+  ],
+  "vol": 0.42,
+  "cross": 2.5,
+  "preload": true
+ },
+ "music": {
+  "files": [
+   "music.mp3"
+  ],
+  "vol": 0.5,
+  "cross": 2.5,
+  "preload": true
+ },
+ "step": {
+  "files": [
+   "step.mp3"
+  ],
+  "vol": 0.5
+ },
+ "jump": {
+  "files": [
+   "jump.mp3"
+  ],
+  "vol": 0.45
+ },
+ "land": {
+  "files": [
+   "land.mp3"
+  ],
+  "vol": 0.7
+ },
+ "dissolve": {
+  "files": [
+   "dissolve.mp3"
+  ],
+  "vol": 0.6
+ },
+ "splash": {
+  "files": [
+   "splash.mp3"
+  ],
+  "vol": 0.7
+ },
+ "pop": {
+  "files": [
+   "pop.mp3"
+  ],
+  "vol": 0.6
+ },
+ "zap": {
+  "files": [
+   "zap.mp3"
+  ],
+  "vol": 0.65
+ },
+ "panel": {
+  "files": [
+   "panel.mp3"
+  ],
+  "vol": 0.6
+ },
+ "dial": {
+  "files": [
+   "dial.mp3"
+  ],
+  "vol": 0.5,
+  "rate": 1.5
+ },
+ "press": {
+  "files": [
+   "press.mp3"
+  ],
+  "vol": 0.65
+ },
+ "wrong": {
+  "files": [
+   "wrong.mp3"
+  ],
+  "vol": 0.6
+ },
+ "gate": {
+  "files": [
+   "gate.mp3"
+  ],
+  "vol": 0.85
+ },
+ "bridge": {
+  "files": [
+   "bridge.mp3"
+  ],
+  "vol": 0.75
+ },
+ "success": {
+  "files": [
+   "success.mp3"
+  ],
+  "vol": 0.7
+ },
+ "swap": {
+  "files": [
+   "swap.mp3"
+  ],
+  "vol": 0.85
+ },
+ "lamp": {
+  "files": [
+   "lamp.mp3"
+  ],
+  "vol": 0.45
+ },
+ "ringA": {
+  "files": [
+   "ringA.mp3"
+  ],
+  "vol": 0.8
+ },
+ "ringB": {
+  "files": [
+   "ringB.mp3"
+  ],
+  "vol": 0.8
+ },
+ "babbleA": {
+  "files": [
+   "babbleA1.mp3",
+   "babbleA2.mp3",
+   "babbleA3.mp3"
+  ],
+  "vol": 0.7,
+  "jitter": 0.06,
+  "gap": 0.25,
+  "rate": 0.94
+ },
+ "babbleB": {
+  "files": [
+   "babbleB1.mp3",
+   "babbleB2.mp3",
+   "babbleB3.mp3"
+  ],
+  "vol": 0.7,
+  "jitter": 0.06,
+  "gap": 0.25,
+  "rate": 1.12
+ },
+ "nuzzle": {
+  "files": [
+   "nuzzle1.mp3",
+   "nuzzle2.mp3"
+  ],
+  "vol": 0.55,
+  "jitter": 0.06,
+  "gap": 0.25
+ },
+ "oops": {
+  "files": [
+   "oops1.mp3"
+  ],
+  "vol": 0.5,
+  "jitter": 0.06,
+  "gap": 0.25
+ },
+ "wow": {
+  "files": [
+   "wow1.mp3"
+  ],
+  "vol": 0.6,
+  "jitter": 0.06,
+  "gap": 0.25
+ }
+}

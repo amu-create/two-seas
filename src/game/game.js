@@ -319,9 +319,15 @@ export class Game {
     me.pulling = !!(ch.pull && inp.pull && me.ground && me.state === 'play' && other.present);
     const ext = ch.pull && other.pulling && other.state === 'play' && !me.pulling ? { pullTo: { x: other.x, y: other.y } } : null;
     me.update(dt, pinp, solids, lim, ext);
-    // 목말: 짝의 머리 위에 가만히 서 있으면 짝을 따라 실려 간다
-    me.riding = !!(ch.stack && other.present && other.state === 'play' && me.state === 'play' && me.ground && Math.abs(me.y - (other.y + 0.92)) < 0.08 && Math.abs(me.x - other.x) < 0.85);
-    if (me.riding && !pinp.x) me.x = damp(me.x, other.x, 16, dt);
+    // 목말: 짝의 머리 위에 가만히 서 있으면 짝에게 붙어서 실려 간다 (움직이거나 뛰면 떨어진다)
+    {
+      const can = ch.stack && other.present && other.state === 'play' && me.state === 'play';
+      const onHead = me.ground && Math.abs(me.y - (other.y + 0.92)) < 0.08 && Math.abs(me.x - other.x) < 0.85;
+      const stick = me.wasRiding && !pinp.x && !inp.jumpPressed && !inp.jump && other.ground && Math.abs(me.x - other.x) < 3;
+      me.riding = !!(can && (onHead || stick));
+      if (me.riding && !pinp.x) { me.x = Math.abs(me.x - other.x) > 0.5 ? other.x : damp(me.x, other.x, 30, dt); me.y = other.y + 0.92; me.vy = 0; me.vx = 0; me.ground = true; }
+      me.wasRiding = me.riding;
+    }
     if (me.jumped) { this.sound('jump', { x: me.x }); this.fx.burst('dust', me.x, me.y + 0.05, this.q.sparks(4), { speed: 0.8, spread: Math.PI, color: '#cfe9ff', life: 0.4, size: 0.1 }); }
     if (me.popped) { me.popped = false; this.fx.ring(me.x, me.y + 0.6, '#dff7ff', 0.9, 0.4); this.fx.burst('spark', me.x, me.y + 0.6, this.q.sparks(8), { speed: 2.2, color: '#dff7ff', life: 0.45 }); this.sound('pop', { x: me.x }); }
     if (me.state === 'play' && me.y < ch.waterKill) this.failMe('water');

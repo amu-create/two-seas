@@ -16,16 +16,18 @@ export function makeChapter5() {
     length: 104, bounds: { min: -6.6, max: 98.6 },
     solids: [
       ground(-8, 10), ground(10, 20, 'stone', 2.8), ground(28, 34, 'stone', 2.8), ground(34, 36, 'stone', 1.4), ground(36, 40),
-      ground(48.4, 62, 'stone'), ground(62, 70), ground(70, 101, 'stone', 4.6),
+      ground(48.4, 50, 'stone'), ground(60, 62, 'stone'), ground(62, 70), ground(70, 101, 'stone', 4.6),
     ],
-    checkpoints: cps([2.9, { x: 12.4, y: 2.8 }, { x: 29.4, y: 2.8 }, 37, 49.6, 63, { x: 72.4, y: 4.6 }, { x: 88, y: 4.6 }]),
+    checkpoints: cps([2.9, { x: 12.4, y: 2.8 }, { x: 29.4, y: 2.8 }, 37, 49.2, 63, { x: 72.4, y: 4.6 }, { x: 88, y: 4.6 }]),
     puzzles: [
       // 넓은 틈(8칸): 나룻배 발판은 빛의 세계에만 있다. 먼저 건넌 쪽이 실을 당겨 주면 짝은 허공을 건너온다.
       new Movers({ id: 'ferry', seenBy: 0, list: [{ x0: 20.3, x1: 25.5, y: 2.8, w: 2.2, period: 8, phase: 0 }] }),
       // 반쪽 다리 (바다가 뒤바뀐 뒤라 누가 어느 반쪽을 가졌는지도 바뀌어 있다)
       new Links({ id: 'br1', things: [{ kind: 'bridge', world: 0, x: 40, w: 4.8 }, { kind: 'bridge', world: 1, x: 44.8, w: 3.6 }] }),
-      // 서로 꺼 주는 불: 내 불은 내 세계에만, 끄는 돌은 짝의 세계에만
-      new Links({ id: 'hall', keys: [{ x: 54.7, world: 1 }, { x: 59.0, world: 0 }], things: [{ kind: 'flame', world: 0, x: 52, w: 1.8, key: 0 }, { kind: 'flame', world: 1, x: 56.4, w: 1.8, key: 1 }] }),
+      // 곁얼음: 물길 위에 한 사람의 세계에는 얼음길이 다 얼어 있고, 다른 사람의 세계에는 짝의 곁에서만 얼음이 언다 → 꼭 붙어서 같이 걷는다.
+      // 얼음길 주인에게만 보이는 불꽃이 길 가운데서 솟는다 → "멈춰!" 하면 둘 다 멈춰야 한다.
+      new Links({ id: 'ice', things: [{ kind: 'bridge', look: 'ice', world: 0, x: 50, w: 10 }, { kind: 'aura', world: 1, x: 50, w: 10, r: 2.3 }] }),
+      new Vents({ id: 'hall', seenBy: 0, vents: [{ x: 54.4, w: 1.6, period: 5.4, on: 1.6, phase: 0 }] }),
       new Lift({ id: 'lift', x: 67.5, w: 2.5, y0: 0, y1: 4.6, cranks: [{ x: 64.4, y: 0 }, { x: 72.4, y: 4.6 }] }),
       new Vents({ id: 'jet', seenBy: 1, vents: [{ x: 67.5, w: 2.5, y: 2.3, h: 0.9, period: 5.5, on: 1.8, phase: 0 }] }),
       new Vents({ id: 'jet0', seenBy: 0, vents: [{ x: 67.5, w: 2.5, y: 2.3, h: 0.9, period: 5.5, on: 1.8, phase: 2.75 }] }),

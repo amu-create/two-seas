@@ -13,7 +13,7 @@ export function makeChapter1() {
     endTitle: '1장 · 끝', endLine: '서로의 바다가 뒤바뀌었다', endNext: '2장에서 계속',
     length: 132, bounds: { min: -6.6, max: 129.6 },
     solids: [
-      ground(-8, 10, 'pier'), ground(10, 13, 'rock', 0.9), ground(13, 20),
+      ground(-8, 10, 'pier'), ground(10, 13, 'rock', 0.9), ground(13, 20.48),   // 첫 점프 틈: 2.4칸 → 1.92칸 (멀다는 의견으로 20% 좁힘)
       ground(22.4, 30), ground(36, 54),   // 30~36은 낭떠러지 (그림자의 세계에만 다리가 있다)
       ground(54, 80, 'stone'), ground(80, 91, 'stone'), ground(91, 112), ground(118, 131),
     ],

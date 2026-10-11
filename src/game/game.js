@@ -187,8 +187,12 @@ export class Game {
   bothIn(x0, x1) { return this.bothPast(x0) && this.me.x < x1 && this.other.x < x1; }
 
   // ---------- 저장/이어하기 ----------
-  _save() {
+  _save(force) {
     if (!this.room) return;
+    // 저장은 폰을 잠깐 멈추게 할 수 있어서 1.5초에 한 번만 (상자를 미는 동안 초당 10번씩 저장하던 것을 막는다)
+    const now = performance.now();
+    if (!force && now - (this._savedAt || 0) < 1500) { this._saveLater = true; return; }
+    this._savedAt = now; this._saveLater = false;
     try { localStorage.setItem(SAVE_KEY, JSON.stringify({ room: this.room, role: this.role, W: this.W, cp: this.me.cp, at: Date.now() })); } catch (e) { /* 저장 못 해도 게임은 계속 */ }
   }
   restore(room) {
@@ -231,7 +235,7 @@ export class Game {
     if (p.ema > 21) { p.slow += ms; p.fast = 0; } else if (p.ema < 14.5) { p.fast += ms; p.slow = 0; } else { p.slow = Math.max(0, p.slow - ms); p.fast = 0; }
     if (p.slow > 1500 && p.tier < QUALITY.length - 1) { p.tier++; p.slow = 0; p.raised = (p.raised || 0); p.lowered = now; this._applyTier(); }
     // 올리는 건 신중하게: 한참 여유가 있었고, 최근에 낮춘 적이 없을 때만
-    if (p.fast > 8000 && p.tier > 0 && now - (p.lowered || 0) > 30000) { p.tier--; p.fast = 0; this._applyTier(); }
+    // 화질을 다시 올리지는 않는다: 올렸다 내렸다 할 때마다 화면을 새로 잡느라 '툭' 끊기는 것이 더 거슬린다
   }
 
   resize() {
@@ -455,7 +459,8 @@ export class Game {
     const me = this.me, o = this.other;
     if (!this.W.end && this._endSeen) this._endReset();
     const hostT = this.link ? this.link.hostNow() : 0;
-    const delay = this.link && this.link.mode === 'p2p' ? 90 : 140;
+    // 짝의 소식이 들쭉날쭉 올수록(중계 연결) 조금 더 과거를 그려서 뚝뚝 끊기지 않게 한다
+    const delay = Math.max(this.link && this.link.mode === 'p2p' ? 90 : 140, o.netDelay || 0);
     const wasBubble = o.state === 'bubble';
     o.update(dt, hostT, delay);
     if (o.present && !wasBubble && o.state === 'bubble') { me.anim.setExpr('worry', 1.0); }
@@ -500,7 +505,7 @@ export class Game {
       if (this.isHost) { this.wAcc += dt; if (this._dirty || this.wAcc > 1.5) this._sendWorld(); }
     }
     this.saveAcc += dt;
-    if (this.saveAcc > 2) { this.saveAcc = 0; this._save(); }
+    if (this.saveAcc > 2 || (this._saveLater && performance.now() - (this._savedAt || 0) > 1500)) { this.saveAcc = 0; this._save(true); }
   }
 
   _camera(dt) {
@@ -566,7 +571,12 @@ export class Game {
       ctx.save(); ctx.translate(c.x, -c.y);
       if (c.state !== 'bubble') { const gy = this._groundBelow(c); if (gy != null) { ctx.save(); ctx.translate(0, c.y - gy); drawCatShadow(ctx, c.anim, 0.32, c.y - gy); ctx.restore(); } }
       const look = LOOKS[c.role];
-      drawCat(ctx, c.anim, look, this.q.glow ? { glow: look.glow, glowPx: 10 * v.dpr } : {});
+      if (this.q.glow && c.state !== 'bubble') { // 몸 둘레의 은은한 빛: 번짐 효과(shadowBlur)는 폰에서 무거워서, 미리 만든 둥근 빛을 깔아 준다
+        const hg = this._halo || (this._halo = {}); let im = hg[look.glow];
+        if (!im) { im = hg[look.glow] = document.createElement('canvas'); im.width = im.height = 96; const hc = im.getContext('2d'); const gr = hc.createRadialGradient(48, 48, 6, 48, 48, 48); gr.addColorStop(0, look.glow); gr.addColorStop(1, 'rgba(255,255,255,0)'); hc.globalAlpha = 0.55; hc.fillStyle = gr; hc.fillRect(0, 0, 96, 96); }
+        ctx.drawImage(im, -1.05, -1.55, 2.1, 2.1);
+      }
+      drawCat(ctx, c.anim, look, {});
       ctx.restore();
       if (c.emote) this._bubble(ctx, c);
     }

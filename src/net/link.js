@@ -35,7 +35,7 @@ export class Link {
   // 두 폰이 함께 쓰는 시계(방장 기준, ms)
   hostNow() { return now() + this.clockOffset; }
   // 중계로 갈 때는 위치를 덜 자주 보낸다 (공개 중계소에 부담을 주지 않게)
-  get stateHz() { return this.mode === 'p2p' ? 20 : (this.ch && this.ch.kind === 'mqtt' ? 10 : 20); }
+  get stateHz() { return this.mode === 'p2p' ? 20 : (this.ch && this.ch.kind === 'mqtt' ? 15 : 20); }
 
   async start() {
     this.ch = await pickChannel(this.room, this.id, this.opts);

@@ -159,6 +159,13 @@ export class RemotePlayer {
     b.push(snap);
     if (b.length > 30) b.shift();
     this.cp = snap.cp;
+    { // 소식이 오는 간격과 그 흔들림을 재서, 얼마나 과거를 그릴지 정한다
+      const now = performance.now(), gap = this.lastAt ? Math.min(600, now - this.lastAt) : 60;
+      this.gapAvg = this.gapAvg == null ? gap : this.gapAvg * 0.9 + gap * 0.1;
+      this.gapDev = this.gapDev == null ? 0 : this.gapDev * 0.9 + Math.abs(gap - this.gapAvg) * 0.1;
+      const want = Math.min(420, this.gapAvg * 1.15 + this.gapDev * 2.6 + 25);
+      this.netDelay = this.netDelay == null ? want : this.netDelay + (want - this.netDelay) * (want > this.netDelay ? 0.12 : 0.02); // 늘릴 땐 빨리, 줄일 땐 천천히
+    }
     this.lastAt = performance.now();
     if (!this.present) { this.present = true; this.x = snap.x; this.y = snap.y; this.anim.pop.x = 0; this.anim.pop.v = 0; this.anim.pop.target = 1; }
   }

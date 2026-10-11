@@ -28,7 +28,7 @@ const P = {
 // 소리 이름 → 진동 (내 고양이 가까이에서 난 소리만)
 const BY_SOUND = { jump: 'jump', dissolve: 'key', splash: null, pop: 'pop', zap: null, panel: 'open', dial: 'dial', press: 'key', wrong: 'wrong', gate: 'gate', bridge: 'gate', success: 'success', swap: 'swap', lamp: 'lamp', nuzzle: 'heart', wow: 'wow' };
 
-let on = true, busyUntil = 0, sw = null;
+let on = true, busyUntil = 0, sw = null, lastTick = 0;
 try { on = localStorage.getItem('twoseas.haptic') !== '0'; } catch (e) { /* 저장소 없음 */ }
 const canVibrate = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
 
@@ -54,7 +54,10 @@ export const haptics = {
     const total = p.reduce((a, b) => a + b, 0);
     if (total > 60) busyUntil = now + total;
     if (canVibrate) { try { navigator.vibrate(p); } catch (e) { /* 무시 */ } }
-    else { iosTick(); if (p.length >= 3) setTimeout(iosTick, p[0] + p[1]); if (p.length >= 5) setTimeout(iosTick, p[0] + p[1] + p[2] + p[3]); }
+    else { // 아이폰 흉내는 화면을 건드리는 방식이라 자잘한 것(단추, 점프, 톱니)에는 쓰지 않고, 굵직한 일에만 드물게
+      if (total < 14 || now - lastTick < 150) return; lastTick = now;
+      iosTick(); if (p.length >= 3) setTimeout(iosTick, p[0] + p[1]); if (p.length >= 5) setTimeout(iosTick, p[0] + p[1] + p[2] + p[3]);
+    }
   },
   bySound(name) { const h = BY_SOUND[name]; if (h) this.buzz(h, h === 'swap' || h === 'gate' || h === 'success'); },
 };

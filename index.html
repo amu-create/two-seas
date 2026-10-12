@@ -32,6 +32,8 @@
 <button id="btnMic" class="hidden" data-free aria-label="음성 대화 켜기/끄기"><svg viewBox="0 0 24 24"><rect x="9" y="3.5" width="6" height="10.5" rx="3" class="f"/><path d="M5.5 11.5a6.5 6.5 0 0013 0M12 18v3M9 21h6"/><path class="x" d="M4.5 4.5l15 15"/></svg><i></i></button>
 <audio id="voice" autoplay playsinline></audio>
 <div id="toast" class="off"></div>
+<button id="btnExit" class="hidden" data-free aria-label="나가기"><svg viewBox="0 0 24 24"><path d="M14 5H6.5A1.5 1.5 0 005 6.5v11A1.5 1.5 0 006.5 19H14"/><path d="M10 12h10M16.5 8.5L20 12l-3.5 3.5"/></svg></button>
+<div id="exitAsk" class="hidden" data-free><div class="exitbox"><p>방에서 나갈까요?</p><p class="tiny">진행은 깬 장까지 저장돼 있어요</p><div class="row"><button id="exitYes" class="big">나가기</button><button id="exitNo" class="big ghost">계속하기</button></div></div></div>
 <button id="btnMute" data-free aria-label="소리 켜기/끄기"><svg viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5H4z" class="f"/><path class="w" d="M15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11"/><path class="x" d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
 
 <!-- 시작 화면 -->
@@ -81,6 +83,7 @@
     <span class="dots"><i></i><i></i><i></i></span>
     <p id="waitText">짝을 기다리는 중</p>
     <p class="tiny" id="waitCode"></p>
+    <button id="waitHome" class="big ghost hidden" data-free>처음 화면으로</button>
   </div>
 </div>
 

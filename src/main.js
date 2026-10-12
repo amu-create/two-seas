@@ -50,6 +50,22 @@ const voice = {
   },
 };
 $('#btnMic').addEventListener('click', () => voice.toggle());
+
+// ---------- 게임 도중 나가기 ----------
+// 짝에게 "나갔어요"를 알리고, 이 방의 이어하기 기록을 지운 뒤 처음 화면으로. 깬 장 기록(장 고르기)은 남는다.
+let left = null;
+function leaveRoom() {
+  try { sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(SESSION_KEY); localStorage.removeItem('twoseas.save.v2'); } catch (e) { /* 무시 */ }
+  location.href = location.pathname;
+}
+$('#btnExit').addEventListener('click', () => $('#exitAsk').classList.remove('hidden'));
+$('#exitNo').addEventListener('click', () => $('#exitAsk').classList.add('hidden'));
+$('#exitYes').addEventListener('click', () => {
+  try { if (link) { link.send('bye', {}); } } catch (e) { /* 무시 */ }
+  if (voice.stream) voice.stream.getTracks().forEach((t) => t.stop());
+  setTimeout(leaveRoom, 350); // 알림이 나갈 틈
+});
+$('#waitHome').addEventListener("click", leaveRoom);
 // 마이크를 미리 받아 둔다 (떨어져 있어요를 고른 순간: 버튼을 누른 순간이어야 권한 창이 뜬다)
 voice.prepare = async function () {
   if (this.stream || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
@@ -84,6 +100,10 @@ const ui = {
     const playing = game.W.phase !== 'lobby';
     $('#wait').classList.toggle('hidden', !(playing && status !== 'ok'));
     if (status === 'ok') { hideLobby(); setTimeout(greet, 3500); }
+    // 짝이 나간 뒤: 연결이 한 번 끊겼다가 다시 이어질 때(짝이 돌아왔을 때)까지 안내를 남겨 둔다
+    if (left) { if (status !== 'ok') left.lost = true; else if (left.lost) { left = null; $('#waitText').textContent = '짝을 기다리는 중'; $('#waitHome').classList.add('hidden'); } }
+    if (left) $('#wait').classList.remove('hidden');
+    $('#btnExit').classList.toggle('hidden', !playing && status !== 'ok');
     if (status === 'full') { $('#joinStatus').textContent = '방이 가득 찼어요'; }
     voice.refresh();
   },
@@ -174,6 +194,11 @@ async function openRoom(code, isHost, id, resume) {
   link = new Link({ room: code, id, isHost, opts: linkOpts() });
   game.attach(link, code);
   voice.attach(link);
+  link.on('bye', () => { // 짝이 나갔다
+    left = { lost: false };
+    $('#waitText').textContent = '짝이 방에서 나갔어요'; $('#wait').classList.remove('hidden'); $('#waitHome').classList.remove('hidden');
+    toast('짝이 나갔어요. 같은 방 주소로 다시 들어오면 이어서 할 수 있어요');
+  });
   link.on('clash', () => { if (isHost && !link.peerId && game.W.phase === 'lobby') { // 같은 번호의 방이 이미 있다 → 번호를 바꾼다
     createRoom(); } });
   const u = new URL(location.href); u.searchParams.set('room', code); u.searchParams.delete('host');

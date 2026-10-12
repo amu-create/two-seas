@@ -144,3 +144,14 @@ body.mirror #game, body.mirror #bg { transform: scaleX(-1); }
 .mode { display: flex; gap: 1.4vw; justify-content: center; margin: -1.2vh 0 2.4vh; }
 .mode button { padding: 1.1vh 2.6vw; border-radius: 3vh; border: 1.5px solid rgba(255, 255, 255, 0.25); background: rgba(255, 255, 255, 0.05); font-size: clamp(10px, 3vh, 14px); letter-spacing: 0.04em; opacity: 0.75; }
 .mode button.sel { border-color: #ffe2a0; background: rgba(255, 226, 160, 0.16); opacity: 1; box-shadow: 0 0 14px rgba(255, 226, 160, 0.35); }
+
+/* 나가기 */
+#btnExit { position: fixed; z-index: 12; top: calc(env(safe-area-inset-top, 0px) + 6px); left: calc(env(safe-area-inset-left, 0px) + 10px); width: 38px; height: 38px; border-radius: 50%; border: none; background: rgba(255, 255, 255, 0.06); opacity: 0.6; padding: 9px; }
+#btnExit svg { width: 100%; height: 100%; fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#exitAsk { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; background: rgba(3, 8, 20, 0.6); }
+#exitAsk.hidden { display: none; }
+#exitAsk .exitbox { text-align: center; padding: 3vh 4vw; border-radius: 3vh; background: rgba(10, 16, 32, 0.92); border: 1px solid rgba(255, 255, 255, 0.18); }
+#exitAsk p { margin: 0 0 1vh; font-size: clamp(14px, 4.4vh, 20px); }
+#exitAsk .tiny { font-size: clamp(10px, 2.8vh, 13px); opacity: 0.6; margin-bottom: 2.6vh; }
+#exitAsk .row { display: flex; gap: 2vw; justify-content: center; }
+#waitHome { margin-top: 2.4vh; pointer-events: auto; }

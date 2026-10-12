@@ -66,7 +66,7 @@ const ui = {
     $('#endui').classList.toggle('hidden', !show); $('#hud').classList.toggle('ending', !!show);
     if (show) { $('#btnNext').classList.toggle('hidden', !ch || ch.id >= CHAPTERS.length); renderChapters(); }
   },
-  onChapter(ch) { $('#btnPull').classList.toggle('hidden', !ch.pull); },
+  onChapter() { /* 도구 단추는 게임이 매 프레임 정한다 (input.setTool) */ },
 };
 const game = new Game({ canvas: $('#game'), bg, input, audio, chapter: makeChapter(Math.max(1, Math.min(CHAPTERS.length, Number(qs.get('ch')) || loadProgress() + 1))), ui });
 ui.onChapter(game.chapter);

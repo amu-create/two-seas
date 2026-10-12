@@ -46,7 +46,7 @@ export class Input {
       if (z === 'pad') this._pad(e);
       if (z === 'jump') { this.jumpHeld = true; this.jumpPressed = true; this.el.jump.classList.add('on'); }
       if (z === 'act') { this.actPressed = true; this.actHeldPtr = true; this.el.act.classList.add('on'); }
-      if (z === 'pull') { this.pullPtr = true; this.el.pull.classList.add('on'); }
+      if (z === 'pull') { this.pullPtr = true; this.toolPressed = true; this.el.pull.classList.add('on'); }
       this._buzz(z);
     });
     surface.addEventListener('pointermove', (e) => {
@@ -74,6 +74,7 @@ export class Input {
       this.keys.add(e.code);
       if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { this.jumpPressed = true; e.preventDefault(); }
       if (e.code === 'KeyE' || e.code === 'Enter' || e.code === 'ArrowDown') { this.actPressed = true; e.preventDefault(); }
+      if (e.code === 'KeyQ' || e.code === 'ShiftLeft') this.toolPressed = true;
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
   }
@@ -111,13 +112,26 @@ export class Input {
       jumpPressed: !this.locked && this.jumpPressed,
       actPressed: !this.locked && this.actPressed,
       actHeld: !this.locked && (!!this.actHeldPtr || k.has('KeyE') || k.has('Enter')),   // 꾹 누르고 있기 (승강기 돌리기)
-      pull: !this.locked && (!!this.pullPtr || k.has('KeyQ') || k.has('ShiftLeft')),       // 실 당기기
+      pull: !this.locked && (!!this.pullPtr || k.has('KeyQ') || k.has('ShiftLeft')),       // 도구 단추를 누르고 있는가 (실 당기기)
+      toolPressed: !this.locked && !!this.toolPressed,                                    // 도구 단추를 막 눌렀는가 (방울 불기, 메아리, 크기 바꾸기)
       taps: this.taps,
     };
-    this.jumpPressed = false; this.actPressed = false; this.taps = [];
+    this.jumpPressed = false; this.actPressed = false; this.toolPressed = false; this.taps = [];
     return out;
   }
 
+  // 도구 단추: 장(또는 구간)마다 다른 도구. 없으면 숨긴다.
+  setTool(tool) {
+    if (tool === this._tool) return; this._tool = tool;
+    const el = this.el.pull; el.classList.toggle('hidden', !tool); el.dataset.tool = tool || '';
+    const ICON = {
+      pull: '<path d="M4 17c4-1 6-5 9-6M13 11l-4-.5M13 11l-1.5 3.8"/><circle cx="18" cy="8" r="3"/>',
+      bubble: '<circle cx="12" cy="11" r="6.5"/><path d="M9.5 8.5a3.5 3.5 0 012.5-1"/><circle cx="18.5" cy="18.5" r="1.8"/>',
+      echo: '<circle cx="9" cy="12" r="4.2"/><path d="M15.5 8a6 6 0 010 8M18.5 5.5a10 10 0 010 13"/>',
+      size: '<rect x="3.5" y="12.5" width="6" height="6" rx="1.5"/><rect x="11" y="5" width="9.5" height="13.5" rx="2.5"/><path d="M6.5 10V6.5M4.8 8.2l1.7-1.7 1.7 1.7"/>',
+    };
+    el.innerHTML = `<svg viewBox="0 0 24 24">${ICON[tool] || ICON.pull}</svg>`;
+  }
   // 상호작용 버튼은 쓸 수 있을 때만 또렷해진다
   setActHint(on) { this.el.act.classList.toggle('ready', !!on); }
 }

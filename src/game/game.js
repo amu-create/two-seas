@@ -14,7 +14,14 @@ const SAVE_KEY = 'twoseas.save.v2';
 const PROGRESS_KEY = 'twoseas.progress.v1';
 // 어디까지 깼는지 (이 폰에 저장). 다음에 방을 만들 때 그 다음 장부터 고를 수 있다.
 export function loadProgress() { try { return Math.max(0, Math.min(CHAPTERS.length, Number(JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}').cleared) || 0)); } catch (e) { return 0; } }
-function saveProgress(n) { try { if (n > loadProgress()) localStorage.setItem(PROGRESS_KEY, JSON.stringify({ cleared: n, at: Date.now() })); } catch (e) { /* 저장 못 해도 진행 */ } }
+function saveProgress(n, rec) { // 깬 장 번호 + 장마다 가장 좋았던 기록(시간, 풍덩 횟수, 별조각)
+  try {
+    const o = JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}'); o.cleared = Math.max(Number(o.cleared) || 0, n); o.at = Date.now();
+    if (rec) { o.best = o.best || {}; const b = o.best[n]; if (!b || rec.stars > b.stars || (rec.stars === b.stars && rec.sec < b.sec)) o.best[n] = rec; }
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(o));
+  } catch (e) { /* 저장 못 해도 진행 */ }
+}
+export function loadBest() { try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}').best || {}; } catch (e) { return {}; } }
 const QUALITY = [            // 좋은 폰 → 느린 폰
   { dpr: 2, parts: 220, k: 1, bgSkip: 1, glow: true },
   { dpr: 1.75, parts: 160, k: 0.75, bgSkip: 1, glow: true },
@@ -75,6 +82,10 @@ export class Game {
   // 지금 내 화면이 보는 바다 (0 빛 / 1 그림자). 장마다 처음부터 뒤바뀌어 있을 수 있고(swap), 도중에 뒤바뀌기도 한다(flips).
   get viewRole() { const tc = this.tc; let n = 0; for (const t of this.W.flips || []) if (tc - t > 0.65) n++; return this.role ^ (this.chapter.swap ? 1 : 0) ^ (n & 1); }
   sees(kind) { return kind === 'both' || this.viewRole === kind; }
+  // 이 장(또는 지금 서 있는 구간)의 도구: 'pull' | 'bubble' | 'echo' | 'size' | null
+  get tool() { const t = this.chapter.tool; return typeof t === 'function' ? t(this) : (t || (this.chapter.pull ? 'pull' : null)); }
+  // 고양이 대신 서 있는 것들(메아리 유령). mine=true: 내 세계에 있는 것, false: 짝의 세계에 있는 것
+  standins(mine) { const out = []; for (const p of this.chapter.puzzles) if (p.standins) p.standins(this, mine, out); return out; }
   // 장 바꾸기: 지도·퍼즐을 새로 만들고 고양이를 출발점에 세운다
   setChapter(n) {
     this.chapter = makeChapter(n);
@@ -165,6 +176,7 @@ export class Game {
   }
   _hostAct(from, type, data) {
     if (type === 'restart') { this.restartChapter(data && data.ch); return; }
+    if (type === 'fell') { this.W.falls = (this.W.falls || 0) + 1; this._dirty = true; }
     let ch = false;
     for (const p of this.chapter.puzzles) if (p.host(this, this.W.pz[p.id], from, type, data || {})) ch = true;
     if (ch) { this.W.rev++; this._dirty = true; }
@@ -213,8 +225,10 @@ export class Game {
   // ---------- 화질 자동 조절 ----------
   _guessTier() {
     const cores = navigator.hardwareConcurrency || 4, mem = navigator.deviceMemory || 4;
-    if (cores <= 4 || mem <= 3) return 2;
-    return 1;
+    if (cores <= 4 || mem <= 3) return 3;
+    // 폰(손가락 화면)은 한 단계 낮게 시작한다: 처음부터 버벅이는 것보다, 여유가 확인되면 한 번 올리는 편이 낫다
+    const phone = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+    return phone ? 2 : 1;
   }
   _applyTier() {
     const t = this.perf.tier;
@@ -235,7 +249,8 @@ export class Game {
     if (p.ema > 21) { p.slow += ms; p.fast = 0; } else if (p.ema < 14.5) { p.fast += ms; p.slow = 0; } else { p.slow = Math.max(0, p.slow - ms); p.fast = 0; }
     if (p.slow > 1500 && p.tier < QUALITY.length - 1) { p.tier++; p.slow = 0; p.raised = (p.raised || 0); p.lowered = now; this._applyTier(); }
     // 올리는 건 신중하게: 한참 여유가 있었고, 최근에 낮춘 적이 없을 때만
-    // 화질을 다시 올리지는 않는다: 올렸다 내렸다 할 때마다 화면을 새로 잡느라 '툭' 끊기는 것이 더 거슬린다
+    // 화질은 딱 한 번만 올린다(한참 여유가 있었고 낮춘 적이 없을 때). 올렸다 내렸다 하면 그때마다 '툭' 끊긴다.
+    if (p.fast > 12000 && p.tier > 0 && !p.lowered && !p.raisedOnce) { p.raisedOnce = true; p.tier--; p.fast = 0; this._applyTier(); }
   }
 
   resize() {
@@ -308,12 +323,14 @@ export class Game {
     // 목말: 가만히 서 있는 짝의 머리 위에 올라설 수 있다
     const o = this.other;
     // 짝이 걸어가면 머리 위의 나도 함께 실려 간다 (내 세계에 길이 없는 곳은 이렇게 건넌다)
-    if (this.chapter.stack && o.present && o.state === 'play' && o.ground) out.push({ x: o.x - 0.42, y: o.y + 0.8, w: 0.84, h: 0.12, oneWay: true, head: true, vx: o.vx });
+    if (this.chapter.stack && o.present && o.state === 'play' && o.ground) out.push({ x: o.x - 0.42 * o.size, y: o.y + 0.92 * o.size - 0.12, w: 0.84 * o.size, h: 0.12, oneWay: true, head: true, vx: o.vx });
     return out;
   }
 
   _phys(dt, inp, first) {
     const me = this.me, other = this.other, ch = this.chapter;
+    if (!ch.sizes) { me.size = 1; other.size = 1; }
+    me.inBubble = false;
     const solids = this._solids();
     // 빛의 실: 너무 멀어지지 않게 (둘이 항상 한 화면에)
     const viewW = this.view.right - this.view.left;
@@ -323,17 +340,19 @@ export class Game {
     this.leash = leash;
     const pinp = this.uiBusy ? { x: inp.x, jump: false, jumpPressed: false } : (first ? inp : { x: inp.x, jump: inp.jump, jumpPressed: false });
     // 실 당기기: 내가 단추를 누르고 있으면 짝이 내 쪽으로 끌려오고, 짝이 누르고 있으면 내가 끌려간다
-    me.pulling = !!(ch.pull && inp.pull && me.ground && me.state === 'play' && other.present);
+    const tool = this.tool; this.input.setTool(this.W.end ? null : tool);
+    me.pulling = !!(tool === 'pull' && inp.pull && me.ground && me.state === 'play' && other.present);
     if ((me.pulling || (other.pulling && me.pulled)) && Math.floor(this.t * 7) !== Math.floor((this.t - dt) * 7)) haptics.buzz('pull');
-    const ext = ch.pull && other.pulling && other.state === 'play' && !me.pulling ? { pullTo: { x: other.x, y: other.y } } : null;
+    const ext = other.pulling && other.state === 'play' && !me.pulling ? { pullTo: { x: other.x, y: other.y } } : null;
     me.update(dt, pinp, solids, lim, ext);
     // 목말: 짝의 머리 위에 가만히 서 있으면 짝에게 붙어서 실려 간다 (움직이거나 뛰면 떨어진다)
     {
-      const can = ch.stack && other.present && other.state === 'play' && me.state === 'play';
-      const onHead = me.ground && Math.abs(me.y - (other.y + 0.92)) < 0.08 && Math.abs(me.x - other.x) < 0.85;
+      const can = ch.stack && other.present && other.state === 'play' && me.state === 'play' && !me.inBubble; // 방울 안에 있을 때는 짝의 머리에 붙지 않는다
+      const headY = other.y + 0.92 * other.size;
+      const onHead = me.ground && Math.abs(me.y - headY) < 0.08 && Math.abs(me.x - other.x) < 0.85;
       const stick = me.wasRiding && !pinp.x && !inp.jumpPressed && !inp.jump && other.ground && Math.abs(me.x - other.x) < 3;
       me.riding = !!(can && (onHead || stick));
-      if (me.riding && !pinp.x) { me.x = Math.abs(me.x - other.x) > 0.5 ? other.x : damp(me.x, other.x, 30, dt); me.y = other.y + 0.92; me.vy = 0; me.vx = 0; me.ground = true; }
+      if (me.riding && !pinp.x) { me.x = Math.abs(me.x - other.x) > 0.5 ? other.x : damp(me.x, other.x, 30, dt); me.y = headY; me.vy = 0; me.vx = 0; me.ground = true; }
       if (me.riding && !me.wasRiding) haptics.buzz('ride');
       me.wasRiding = me.riding;
     }
@@ -429,6 +448,11 @@ export class Game {
   }
 
   // 장의 끝: 달문 앞에서 만나 꼭 붙는다. 장에 따라 여기서 바다가 뒤바뀐다.
+  // 이번 판의 성적: 걸린 시간, 방울 타고 돌아간 횟수, 모은 별조각
+  _result() {
+    const sp = this.chapter.puzzles.find((p) => p.count), stars = sp ? sp.count(this) : 0, total = sp ? sp.list.length : 0;
+    return { sec: Math.max(1, Math.round(this.W.end)), falls: this.W.falls || 0, stars, total };
+  }
   _ending(dt) {
     if (!this.W.end) return;
     const u = this.tc - this.W.end, me = this.me, o = this.other, e = this.chapter.end, spots = e.spots;
@@ -450,10 +474,10 @@ export class Game {
     if (e.flip && u > 3.9 && u < 6.4) me.face = Math.sin((u - 3.9) * 4.2) > 0 ? 1 : -1; // 어리둥절해서 두리번
     if (u > cardAt) {
       this.card.end = Math.min(1, this.card.end + dt * 0.8);
-      if (!this._endUi) { this._endUi = true; saveProgress(this.chapter.id); this.ui.onEnd(true, this.chapter); }
+      if (!this._endUi) { this._endUi = true; this.result = this._result(); saveProgress(this.chapter.id, this.result); this.ui.onEnd(true, this.chapter); }
     }
   }
-  _endReset() { this._endSeen = this._endUi = false; this.endU = 0; }
+  _endReset() { this._endSeen = this._endUi = false; this.result = null; this.endU = 0; }
 
   _animate(dt) {
     const me = this.me, o = this.other;
@@ -524,7 +548,7 @@ export class Game {
     tx = Math.max(tx, b.min + halfW - 1.4);
     c.x = Math.abs(tx - c.x) > 30 ? tx : damp(c.x, tx, 3.6, dt);
     const avgY = Math.max(0, o.present && o.state === 'play' ? (me.y + o.y) / 2 : me.y); // 높은 곳에 오르면 화면도 따라 올라간다
-    const ty = CAM_Y / c.zoom + clamp(avgY * 0.72, 0, 4.2) + (c.zoom > 1 ? 0.15 : 0);
+    const ty = CAM_Y / c.zoom + clamp(avgY * 0.78, 0, 9) + (c.zoom > 1 ? 0.15 : 0);
     c.y = damp(c.y, ty, 3, dt);
     v.s = s; v.cx = c.x; v.cy = c.y; v.zoom = c.zoom;
     v.left = c.x - halfW; v.right = c.x + halfW;
@@ -576,6 +600,7 @@ export class Game {
         if (!im) { im = hg[look.glow] = document.createElement('canvas'); im.width = im.height = 96; const hc = im.getContext('2d'); const gr = hc.createRadialGradient(48, 48, 6, 48, 48, 48); gr.addColorStop(0, look.glow); gr.addColorStop(1, 'rgba(255,255,255,0)'); hc.globalAlpha = 0.55; hc.fillStyle = gr; hc.fillRect(0, 0, 96, 96); }
         ctx.drawImage(im, -1.05, -1.55, 2.1, 2.1);
       }
+      if (c.size !== 1) { const k = c.drawSize = damp(c.drawSize || 1, c.size, 9, 1 / 60); ctx.scale(k, k); } else if (c.drawSize && Math.abs(c.drawSize - 1) > 0.01) { const k = c.drawSize = damp(c.drawSize, 1, 9, 1 / 60); ctx.scale(k, k); }
       drawCat(ctx, c.anim, look, {});
       ctx.restore();
       if (c.emote) this._bubble(ctx, c);
@@ -663,6 +688,12 @@ export class Game {
       ctx.font = font(v.H * 0.09, 200); spaced(ch.endTitle, v.W / 2, v.H * 0.27, v.H * 0.03);
       ctx.shadowBlur = 0; ctx.font = font(v.H * 0.045, 300); ctx.globalAlpha = a * 0.9; spaced(ch.endLine, v.W / 2, v.H * 0.4, v.H * 0.01);
       ctx.globalAlpha = a * 0.6; ctx.font = font(v.H * 0.036, 300); spaced(ch.endNext, v.W / 2, v.H * 0.49, v.H * 0.012);
+      const R = this.result; // 성적: 시간 · 풍덩 · 별조각 (다시 도전할 이유)
+      if (R) {
+        const mm = Math.floor(R.sec / 60), ss = String(R.sec % 60).padStart(2, '0');
+        ctx.globalAlpha = a * 0.95; ctx.font = font(v.H * 0.05, 400);
+        spaced(`${mm}:${ss}   ·   풍덩 ${R.falls}번` + (R.total ? `   ·   ${'★'.repeat(R.stars)}${'☆'.repeat(R.total - R.stars)}` : ''), v.W / 2, v.H * 0.6, v.H * 0.006);
+      }
       ctx.globalAlpha = 1;
     }
   }
@@ -677,6 +708,7 @@ export class Game {
       other: { present: this.other.present, x: this.other.x, y: this.other.y, state: this.other.state },
       link: this.link ? { status: this.link.status, mode: this.link.mode, rtt: Math.round(this.link.rtt), kind: this.link.ch && this.link.ch.kind } : null,
       beats: W.beats, flips: W.flips, end: W.end, pz,
+      tool: this.tool, role: this.role,
       fps: this.perf.fps, tier: this.perf.tier, frameMs: Math.round(this.perf.ema * 10) / 10, card: this.card,
     };
   }

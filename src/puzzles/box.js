@@ -13,9 +13,9 @@ export class Box {
   solids(g, out) { out.push({ x: this.bx, y: this.y, w: this.w, h: this.h, box: true }); }
   peek() { return { x: this.bx, w: this.w, min: this.min, max: this.max }; }
   update(g, dt) {
-    const st = g.pz(this.id), me = g.me, hw = PHYS.w / 2, ix = g.inp ? Math.sign(g.inp.x || 0) : 0;
+    const st = g.pz(this.id), me = g.me, hw = PHYS.w * (me.size || 1) / 2, ix = g.inp ? Math.sign(g.inp.x || 0) : 0;
     let pushed = false;
-    if (ix && me.state === 'play' && me.ground && Math.abs(me.y - this.y) < 0.1) {
+    if (ix && me.state === 'play' && me.ground && Math.abs(me.y - this.y) < 0.1 && (!this.heavy || (me.size || 1) > 1.1)) { // 무거운 상자는 큰 고양이만 민다
       const touch = ix > 0 ? Math.abs(me.x + hw - this.bx) < 0.07 : Math.abs(me.x - hw - (this.bx + this.w)) < 0.07;
       if (touch) {
         const nb = clamp(this.bx + ix * 2.1 * dt, this.min, this.max);

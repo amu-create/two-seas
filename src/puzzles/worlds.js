@@ -9,7 +9,7 @@
 // cfg: { id,
 //   keys:   [{ x, y, world, mark }],
 //   things: [{ kind:'bridge'|'door'|'flame'|'riser', world, x, w, y, h, key, mark }] }   key가 없으면 늘 있는 것
-import { TAU, damp, rgba, easeInOut, roundRect, sat, lerp } from '../util.js';
+import { TAU, damp, rgba, easeInOut, roundRect, sat, lerp, rng } from '../util.js';
 import { drawGlyph } from '../render/glyphs.js';
 import { flame, TINT } from './vents.js';
 import { haptics } from '../game/haptics.js';
@@ -17,14 +17,31 @@ import { haptics } from '../game/haptics.js';
 export class Links {
   constructor(cfg) {
     Object.assign(this, { keys: [], things: [] }, cfg);
-    this.keys = this.keys.map((k) => ({ y: 0, world: 'both', ...k, sink: 0 }));
-    this.things = this.things.map((t) => ({ y: 0, world: 'both', h: t.kind === 'flame' ? 2.3 : t.kind === 'door' ? 4.3 : t.kind === 'wall' ? 2.9 : 1.45, ...t, u: t.key == null ? 1 : 0 }));
-    this.flash = -9;
+    this.keys = this.keys.map((k, i) => ({ y: 0, world: 'both', ...k, sink: 0, i }));
+    this.things = this.things.map((t) => ({ y: 0, world: 'both', h: t.kind === 'flame' ? 2.3 : t.kind === 'door' ? 4.3 : t.kind === 'wall' ? 2.9 : 1.45, ...t, u: t.key == null && !t.burn ? 1 : 0 })).map((t, i) => ({ ...t, i }));
+    this.flash = -9; this._plan = null;
   }
-  init() { return {}; }
+  init() { return { seed: Math.floor(Math.random() * 1e6) + 1 }; }
+  // 매번 다른 답: shuffle이면 "어느 돌이 어느 것을 바꾸는지"와 문양을 판마다 섞는다 (문양 딱지가 붙은 것들끼리만)
+  plan(g) {
+    const seed = this.shuffle ? ((g.pz(this.id) || {}).seed || 1) : 0;
+    if (this._plan && this._plan.seed === seed) return this._plan;
+    const P = { seed, key: this.things.map((t) => t.key), tm: this.things.map((t) => t.mark), km: this.keys.map((k) => k.mark) };
+    if (this.shuffle) {
+      const r = rng(seed * 9973 + 17), idx = this.things.filter((t) => t.mark != null && typeof t.key === 'number').map((t) => t.i);
+      const keys = idx.map((i) => this.things[i].key), pool = [0, 1, 2, 3, 4, 5, 6, 7];
+      for (let i = keys.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [keys[i], keys[j]] = [keys[j], keys[i]]; }
+      for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+      idx.forEach((ti, n) => { P.key[ti] = keys[n]; P.tm[ti] = pool[n]; P.km[keys[n]] = pool[n]; });
+    }
+    return (this._plan = P);
+  }
   // 그 세계의 눈을 가진 고양이들
-  cats(g, world) { return world === 'both' ? [g.me, g.other] : (g.viewRole === world ? [g.me] : [g.other]); }
-  onKey(c, k) { return c.present !== false && c.state === 'play' && c.ground && Math.abs(c.x - k.x) < 0.52 && Math.abs(c.y - k.y) < 0.12; }
+  cats(g, world) { // 메아리 유령도 그 세계의 고양이로 친다
+    if (world === 'both') return [g.me, g.other, ...g.standins(true), ...g.standins(false)];
+    return g.viewRole === world ? [g.me, ...g.standins(true)] : [g.other, ...g.standins(false)];
+  }
+  onKey(c, k) { return c.present !== false && c.state === 'play' && c.ground && Math.abs(c.x - k.x) < 0.52 && Math.abs(c.y - k.y) < 0.12 && (!k.heavy || (c.size || 1) > 1.1); } // 무거운 돌은 큰 고양이(나 상자)만 누른다
   pressed(g, i) { // 그 세계의 고양이가 밟고 있거나, 상자가 올려져 있으면 눌린다 (상자는 두 세계에 다 있는 물건)
     const k = this.keys[i];
     return this.cats(g, k.world).some((c) => this.onKey(c, k)) || g.chapter.puzzles.some((p) => p.bx != null && k.x > p.bx + 0.05 && k.x < p.bx + p.w - 0.05 && Math.abs(p.y - k.y) < 0.1);
@@ -33,15 +50,15 @@ export class Links {
   followLeft(g, t) { const o = g.other; return o.present ? Math.min(Math.max(o.x - t.w / 2 + (t.off || 0), t.x0), t.x1 - t.w) : t.x0; }
   // 곁얼음: 내 세계에서는 짝의 곁(r칸 안)에서만 물이 언다
   auraSpan(g, t) { const o = g.other; if (!o.present || o.state !== 'play') return null; const a = Math.max(t.x, o.x - t.r), b = Math.min(t.x + t.w, o.x + t.r); return b - a > 0.25 ? [a, b] : null; }
-  active(g, t) { return t.key == null ? true : (Array.isArray(t.key) ? t.key : [t.key]).some((i) => this.pressed(g, i)); }
+  active(g, t) { if (t.burn) return false; if (t.latched) return true; const key = this.plan(g).key[t.i]; if (key == null) return true; const ks = Array.isArray(key) ? key : [key]; return t.all ? ks.every((i) => this.pressed(g, i)) : ks.some((i) => this.pressed(g, i)); }
   mine(g, o) { return g.sees(o.world); }
 
   solids(g, out) {
     for (const t of this.things) {
       if (!this.mine(g, t)) continue;
-      if (t.kind === 'bridge') { if (t.u > 0.6) out.push({ x: t.x, y: t.y - 0.32, w: t.w, h: 0.32 }); }
-      else if (t.kind === 'door') { if (t.u < 0.6) out.push({ x: t.x, y: t.y, w: t.w, h: t.h }); }
-      else if (t.kind === 'wall') out.push({ x: t.x, y: t.y, w: t.w, h: t.h });
+      if (t.kind === 'bridge') { if (t.u > 0.6 && (!t.thin || (g.me.size || 1) < 0.9)) out.push({ x: t.x, y: t.y - 0.32, w: t.w, h: 0.32 }); } // 얇은 다리는 작은 고양이만 버틴다
+      else if (t.kind === 'door') { if (t.u < 0.6) out.push({ x: t.x, y: t.y + (t.hole || 0), w: t.w, h: t.h - (t.hole || 0) }); }
+      else if (t.kind === 'wall') out.push({ x: t.x, y: t.y + (t.hole || 0), w: t.w, h: t.h - (t.hole || 0) }); // hole: 아래쪽에 뚫린 낮은 굴 (작은 고양이만 지난다)
       else if (t.kind === 'follow') {
         // 발판 위에 가만히 서 있으면 발판과 함께 실려 간다 (물리 계산 바로 앞에서 옮겨야 한 프레임도 밀리지 않는다)
         const left = this.followLeft(g, t), prev = t._left ?? left, d = left - prev, me = g.me;
@@ -55,14 +72,16 @@ export class Links {
   }
   // 시험용 봇: 내 세계에서 지금 뜨거운 곳
   hazards(tc, g) { return g ? this.things.filter((t) => t.kind === 'flame' && this.mine(g, t)).map((t) => ({ x0: t.x, x1: t.x + t.w, y0: t.y, y1: t.y + t.h, active: t.u < 0.6, activeIn: t.u < 0.6 ? 0 : 99, clearIn: 0 })) : []; }
-  peek(g) { return { keys: this.keys.map((k, i) => ({ x: k.x, y: k.y, world: k.world, on: this.pressed(g, i) })), things: this.things.map((t) => ({ kind: t.kind, world: t.world, x: t.x, w: t.w, u: +t.u.toFixed(2), key: t.key ?? null, mine: this.mine(g, t) })) }; }
+  peek(g) { return { keys: this.keys.map((k, i) => ({ x: k.x, y: k.y, world: k.world, on: this.pressed(g, i) })), things: this.things.map((t) => ({ kind: t.kind, world: t.world, x: t.x, w: t.w, u: +t.u.toFixed(2), key: this.plan(g).key[t.i] ?? null, mine: this.mine(g, t) })) }; }
 
   update(g, dt) {
     const me = g.me;
     this.keys.forEach((k, i) => { const p = this.pressed(g, i); if (p && !k.was && this.mine(g, k) && this.onKey(g.me, k)) haptics.buzz('key'); k.was = p; k.sink = damp(k.sink, p ? 1 : 0, 14, dt); });
     for (const t of this.things) {
       const on = this.active(g, t), was = t.u > 0.5;
-      t.u = damp(t.u, on ? 1 : 0, t.kind === 'riser' ? 2.2 : t.kind === 'bridge' ? 6 : 5, dt);
+      if (on && t.latch && !t.latched) t.latched = true; // 한 번 열리면 열린 채로 (돌 둘을 동시에 밟아야 하는 문)
+      if (t.kind === 'riser') t.u = Math.max(0, Math.min(1, t.u + (on ? 1 : -1) * dt * 1.5 / t.h)); // 받침돌은 초당 1.5칸으로 일정하게 (위에 선 고양이를 놓치지 않게)
+      else t.u = damp(t.u, on ? 1 : 0, t.kind === 'bridge' ? 6 : 5, dt);
       if (t.u > 0.5 !== was && t.key != null) {
         const near = this.mine(g, t);
         if (near) { haptics.buzz('open'); g.sound(t.kind === 'flame' ? 'press' : t.u > 0.5 ? 'panel' : 'press', { x: t.x }); if (t.kind === 'bridge' && t.u > 0.5) g.fx.burst('spark', t.x + t.w / 2, t.y + 0.1, g.q.sparks(12), { speed: 1.2, up: 0.7, color: g.pal.glow, life: 0.8, size: 0.07, rx: t.w }); }
@@ -81,7 +100,7 @@ export class Links {
         if (t.kind !== 'flame' || !this.mine(g, t)) continue;
         const T = TINT[t.world === 'both' ? g.viewRole : t.world] || TINT[1], k = 1 - t.u, Y = -t.y;
         if (k > 0.03) flame(ctx, t.x, Y, t.w, t.h * (0.25 + 0.75 * k), Math.min(1, k * 1.4), g.t, t.x, T);
-        if (t.mark != null) this.badge(g, ctx, t.x + t.w / 2, Y - t.h - 0.7, t.mark, T[4], k);
+        { const m = this.plan(g).tm[t.i]; if (m != null) this.badge(g, ctx, t.x + t.w / 2, Y - t.h - 0.7, m, T[4], k); }
       }
       return;
     }
@@ -98,7 +117,12 @@ export class Links {
       pg.addColorStop(0, pal.top); pg.addColorStop(1, pal.stone);
       ctx.fillStyle = pg; roundRect(ctx, X - 0.42, top, 0.84, 0.22, 0.08); ctx.fill();
       ctx.strokeStyle = pal.topHi; ctx.globalAlpha = 0.6; ctx.lineWidth = 0.03; ctx.beginPath(); ctx.moveTo(X - 0.3, top + 0.03); ctx.lineTo(X + 0.3, top + 0.03); ctx.stroke(); ctx.globalAlpha = 1;
-      if (k.mark != null) this.badge(g, ctx, X, Y - 1.95 - Math.sin(g.t * 2 + X) * 0.04, k.mark, pal.raw('warm'), 0.55 + 0.45 * s);
+      if (k.heavy) { // 무거운 돌: 넓고 두껍고, 큰 발바닥 무늬
+        ctx.fillStyle = pal.stoneDark; roundRect(ctx, X - 0.62, Y - 0.1, 1.24, 0.2, 0.06); ctx.fill();
+        ctx.fillStyle = pal.warm; ctx.globalAlpha = 0.75; ctx.beginPath(); ctx.ellipse(X, top - 0.5, 0.2, 0.16, 0, 0, TAU); ctx.fill(); for (let n = -1; n <= 1; n++) { ctx.beginPath(); ctx.arc(X + n * 0.19, top - 0.78 + Math.abs(n) * 0.06, 0.08, 0, TAU); ctx.fill(); } ctx.globalAlpha = 1;
+      }
+      const km = this.plan(g).km[i];
+      if (km != null) this.badge(g, ctx, X, Y - 1.95 - Math.sin(g.t * 2 + X) * 0.04, km, pal.raw('warm'), 0.55 + 0.45 * s);
       else { // 짝에게 닿는 돌: 밟고 있으면 빛이 실을 타고 짝에게 흘러간다
         ctx.fillStyle = pal.warm; ctx.globalAlpha = 0.35 + 0.6 * s;
         for (let n = 0; n < 3; n++) { const u = (g.t * 0.9 + n / 3) % 1; ctx.globalAlpha = (0.25 + 0.6 * s) * (1 - u); ctx.beginPath(); ctx.arc(X, Y - 0.5 - u * 0.9, 0.05 + 0.03 * s, 0, TAU); ctx.fill(); }
@@ -106,7 +130,8 @@ export class Links {
       }
       // 같은 세계 안에서 이어진 것은 점선으로 보여 준다
       for (const t of this.things) {
-        if (!this.mine(g, t) || !(Array.isArray(t.key) ? t.key.includes(i) : t.key === i) || t.kind === 'flame') continue;
+        const tk = this.plan(g).key[t.i];
+        if (!this.mine(g, t) || !(Array.isArray(tk) ? tk.includes(i) : tk === i) || t.kind === 'flame') continue;
         const tx = t.x + t.w / 2, TY = -t.y;
         ctx.strokeStyle = pal.warm; ctx.lineWidth = 0.05; ctx.globalAlpha = 0.18 + 0.6 * t.u; ctx.setLineDash([0.12, 0.16]); ctx.lineDashOffset = -g.t * 0.6 * t.u;
         ctx.beginPath(); ctx.moveTo(X, Y + 0.14); ctx.lineTo(X, Y + 0.45); ctx.lineTo(tx, Math.max(Y, TY) + 0.45); ctx.lineTo(tx, TY + 0.14); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
@@ -115,7 +140,10 @@ export class Links {
     for (const t of this.things) {
       if (!this.mine(g, t)) continue;
       const Y = -t.y;
-      if (t.kind === 'bridge') { if (t.look === 'ice') this.ice(g, ctx, t.x, t.x + t.w, t.y, 1); else this.bridge(g, ctx, t); }
+      if (t.kind === 'bridge' && t.thin) { // 얇은 다리: 가느다란 덩굴 한 줄
+        ctx.strokeStyle = pal.woodHi; ctx.lineWidth = 0.07; ctx.globalAlpha = 0.9; ctx.beginPath(); ctx.moveTo(t.x, Y + 0.05); for (let x = t.x; x <= t.x + t.w + 0.01; x += 0.4) ctx.lineTo(x, Y + 0.05 + Math.sin(x * 3 + g.t * 1.5) * 0.03); ctx.stroke();
+        ctx.fillStyle = pal.glow; for (let x = t.x + 0.5; x < t.x + t.w; x += 1.1) { ctx.beginPath(); ctx.ellipse(x, Y - 0.02, 0.16, 0.08, 0.4, 0, TAU); ctx.fill(); } ctx.globalAlpha = 1;
+      } else if (t.kind === 'bridge') { if (t.look === 'ice') this.ice(g, ctx, t.x, t.x + t.w, t.y, 1); else this.bridge(g, ctx, t); }
       else if (t.kind === 'aura') { const sp = this.auraSpan(g, t); if (sp) this.ice(g, ctx, sp[0], sp[1], t.y, 0.9, true); }
       else if (t.kind === 'follow') {
         const x = this.followLeft(g, t), cx = x + t.w / 2, mv = Math.min(1, (t._v || 0) / 3);
@@ -137,6 +165,7 @@ export class Links {
         for (let x = t.x + 0.3; x < t.x + t.w - 0.15; x += 0.28) { ctx.moveTo(x, Y + 0.03); ctx.lineTo(x, Y + 0.19); }
         ctx.stroke();
       } else if (t.kind === 'wall') { // 내 세계에만 서 있는 돌벽 (짝은 그냥 지나다닌다)
+        if (t.hole) { ctx.save(); ctx.beginPath(); ctx.rect(t.x - 1, Y - t.h - 2, t.w + 2, t.h + 2 - t.hole); ctx.clip(); }
         const wg = ctx.createLinearGradient(t.x, 0, t.x + t.w, 0);
         wg.addColorStop(0, pal.stone); wg.addColorStop(1, pal.stoneDark);
         ctx.fillStyle = wg; roundRect(ctx, t.x, Y - t.h, t.w, t.h + 0.05, 0.12); ctx.fill();
@@ -146,6 +175,7 @@ export class Links {
         ctx.stroke();
         const gl = ctx.createLinearGradient(0, Y - t.h - 0.9, 0, Y - t.h); gl.addColorStop(0, rgba('#ffffff', 0)); gl.addColorStop(1, pal.glow);
         ctx.globalAlpha = 0.22 + 0.08 * Math.sin(g.t * 2 + t.x); ctx.fillStyle = gl; ctx.fillRect(t.x, Y - t.h - 0.9, t.w, 0.9); ctx.globalAlpha = 1;
+        if (t.hole) { ctx.restore(); ctx.fillStyle = rgba('#000000', 0.35); ctx.fillRect(t.x, Y - t.hole, t.w, t.hole); ctx.strokeStyle = pal.warm; ctx.globalAlpha = 0.5; ctx.lineWidth = 0.05; ctx.beginPath(); ctx.moveTo(t.x, Y - t.hole); ctx.lineTo(t.x + t.w, Y - t.hole); ctx.stroke(); ctx.globalAlpha = 1; } // 굴
       } else if (t.kind === 'door') {
         const e = easeInOut(t.u), off = e * (t.h + 0.2);
         ctx.fillStyle = pal.stoneDark; ctx.fillRect(t.x - 0.26, Y - t.h - 0.1, 0.14, t.h + 0.1); ctx.fillRect(t.x + t.w + 0.12, Y - t.h - 0.1, 0.14, t.h + 0.1); // 문설주
@@ -157,9 +187,10 @@ export class Links {
         ctx.strokeStyle = pal.warm; ctx.globalAlpha = 0.35 + 0.5 * t.u; ctx.lineWidth = 0.05;
         for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.arc(t.x + t.w / 2, Y - t.h + off + 0.9 + k * 1.05, 0.22, 0, TAU); ctx.stroke(); }
         ctx.globalAlpha = 1; ctx.restore();
+        if (t.hole && t.u < 0.9) { ctx.fillStyle = rgba('#02050c', 0.85 * (1 - t.u)); roundRect(ctx, t.x - 0.02, Y - t.hole, t.w + 0.04, t.hole + 0.02, 0.2); ctx.fill(); ctx.strokeStyle = pal.warm; ctx.globalAlpha = 0.55 * (1 - t.u); ctx.lineWidth = 0.05; ctx.beginPath(); ctx.moveTo(t.x, Y - t.hole); ctx.lineTo(t.x + t.w, Y - t.hole); ctx.stroke(); ctx.globalAlpha = 1; } // 굴
         ctx.fillStyle = pal.stoneDark; ctx.fillRect(t.x - 0.3, Y - t.h - 0.75, t.w + 0.6, 0.75);
         ctx.fillStyle = pal.top; ctx.fillRect(t.x - 0.3, Y - t.h - 0.75, t.w + 0.6, 0.12);
-        if (t.mark != null) this.badge(g, ctx, t.x + t.w / 2, Y - t.h - 1.35, t.mark, pal.raw('warm'), 1 - t.u * 0.6);
+        { const m = this.plan(g).tm[t.i]; if (m != null) this.badge(g, ctx, t.x + t.w / 2, Y - t.h - 1.35, m, pal.raw('warm'), 1 - t.u * 0.6); }
       } else if (t.kind === 'riser') {
         const h = t.h * t.u;
         ctx.fillStyle = pal.stoneDark; ctx.fillRect(t.x + 0.08, Y - 0.03, t.w - 0.16, 0.08);

@@ -29,6 +29,7 @@ export class Player {
     this.jumped = false;     // 이번 프레임에 점프했는가 (소리용)
     this.emote = null; this.emoteT = 0;
     this.present = true;
+    this.size = 1;           // 몸 크기 (크기 바꾸기 장: 큰 고양이 1.35 / 작은 고양이 0.62)
   }
 
   // solids: [{x,y,w,h}] (x,y = 왼쪽 아래 모서리, y는 위로 +)
@@ -50,7 +51,8 @@ export class Player {
       }
     }
 
-    const P = PHYS;
+    const P = PHYS, sz = this.size || 1, H = P.h * sz;
+    const jumpV = P.jumpV * (sz > 1.1 ? 1.12 : sz < 0.9 ? 0.87 : 1); // 큰 고양이는 높이, 작은 고양이는 낮게 뛴다
     const target = ax * P.run;
     const rate = this.ground ? (Math.abs(target) > 0.01 ? P.accel : P.decel) : P.airAccel;
     const dv = target - this.vx;
@@ -60,7 +62,7 @@ export class Player {
     this.coyoteT = this.ground ? P.coyote : Math.max(0, this.coyoteT - dt);
     this.bufferT = wantJump ? P.buffer : Math.max(0, this.bufferT - dt);
     if (this.bufferT > 0 && this.coyoteT > 0) {
-      this.vy = P.jumpV; this.ground = false; this.coyoteT = 0; this.bufferT = 0; this.jumped = true;
+      this.vy = jumpV; this.ground = false; this.coyoteT = 0; this.bufferT = 0; this.jumped = true;
     }
     if (!holdJump && this.vy > P.cutV && !this.ground) this.vy = damp(this.vy, P.cutV, 30, dt);
     this.vy = Math.max(this.vy - P.gravity * dt, -P.maxFall);
@@ -77,10 +79,10 @@ export class Player {
       if (nx < limits.min) { nx = limits.min; this.vx = Math.max(0, this.vx); }
       if (nx > limits.max) { nx = limits.max; this.vx = Math.min(0, this.vx); }
     }
-    const hw = P.w / 2;
+    const hw = P.w * sz / 2;
     for (const s of solids) {
       if (s.oneWay) continue; // 위에서 내려앉을 수만 있는 발판(짝의 머리 등)은 옆에서 막지 않는다
-      if (this.y + P.h <= s.y + 0.001 || this.y >= s.y + s.h - 0.001) continue;
+      if (this.y + H <= s.y + 0.001 || this.y >= s.y + s.h - 0.001) continue;
       if (nx + hw > s.x && nx - hw < s.x + s.w) {
         // 낮은 턱(0.28칸 이하)은 그냥 올라선다
         const step = s.y + s.h - this.y;
@@ -99,7 +101,7 @@ export class Player {
       const top = s.y + s.h;
       if (this.vy <= 0 && this.y >= top - 0.02 && ny <= top) { ny = top; this.vy = 0; grounded = true; if (s.vx) this.x += s.vx * dt; }
       else if (s.carry && this.vy <= 1.5 && this.y < top && this.y > top - 0.45) { ny = top; this.vy = 0; grounded = true; } // 올라오는 승강기가 발밑에서 밀어 올린다
-      else if (!s.oneWay && this.vy > 0 && this.y + P.h <= s.y + 0.02 && ny + P.h >= s.y) { ny = s.y - P.h; this.vy = 0; }
+      else if (!s.oneWay && this.vy > 0 && this.y + H <= s.y + 0.02 && ny + H >= s.y) { ny = s.y - H; this.vy = 0; }
     }
     this.y = ny;
     this.ground = grounded;
@@ -145,6 +147,7 @@ export class RemotePlayer {
     this.role = role;
     this.x = x; this.y = y; this.vx = 0; this.vy = 0; this.face = -1; this.ground = true; this.state = 'play';
     this.anim = new CatAnim(role);
+    this.size = 1;
     this.buf = [];
     this.cp = 0;
     this.present = false;

@@ -77,7 +77,22 @@ export function sign(g, ctx, x, y, kind) {
   const head = (hx, hy, s, col) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(hx - s * 0.62, hy - s * 0.72, s * 0.34, 0, TAU); ctx.arc(hx + s * 0.62, hy - s * 0.72, s * 0.34, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.ellipse(hx, hy, s, s * 0.82, 0, 0, TAU); ctx.fill(); };
   const arrow = (ax, ay, dx, dy) => { ctx.strokeStyle = W; ctx.fillStyle = W; ctx.lineWidth = 0.06; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + dx, ay + dy); ctx.stroke(); const a = Math.atan2(dy, dx); ctx.beginPath(); ctx.moveTo(ax + dx + Math.cos(a) * 0.12, ay + dy + Math.sin(a) * 0.12); ctx.lineTo(ax + dx + Math.cos(a + 2.5) * 0.14, ay + dy + Math.sin(a + 2.5) * 0.14); ctx.lineTo(ax + dx + Math.cos(a - 2.5) * 0.14, ay + dy + Math.sin(a - 2.5) * 0.14); ctx.closePath(); ctx.fill(); };
   const bob = Math.sin(g.t * 2.2) * 0.04;
-  if (kind === 'follow') { // 짝이 걸으면 내 발판이 따라온다
+  if (kind === 'bubble') { // 내가 불면 → 짝이 방울을 타고 오른다
+    head(-0.5, 0.3, 0.2, A); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 0.05; for (let k = 0; k < 2; k++) { ctx.beginPath(); ctx.arc(-0.12 + k * 0.16, 0.26 - k * 0.1, 0.05 + k * 0.03, 0, TAU); ctx.stroke(); }
+    const by = 0.1 - ((g.t * 0.35) % 1) * 0.5; ctx.beginPath(); ctx.arc(0.45, by, 0.34, 0, TAU); ctx.stroke(); head(0.45, by + 0.04, 0.17, B); arrow(0.86, 0.3, 0, -0.55);
+  } else if (kind === 'wind') { // 바람이 방울을 옆으로 민다
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 0.05; ctx.beginPath(); ctx.arc(-0.3 + Math.sin(g.t * 1.2) * 0.25, 0, 0.3, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = W; for (let k = 0; k < 3; k++) { const yy = -0.36 + k * 0.36, u = (g.t * 0.8 + k * 0.3) % 1; ctx.globalAlpha = 1 - u; ctx.beginPath(); ctx.moveTo(-0.75 + u * 0.5, yy); ctx.bezierCurveTo(-0.4 + u * 0.5, yy - 0.1, -0.1 + u * 0.5, yy + 0.1, 0.25 + u * 0.5, yy); ctx.stroke(); } ctx.globalAlpha = 1; arrow(0.3, 0.45, 0.4, 0);
+  } else if (kind === 'echo' || kind === 'echo2') { // 내가 걸으면 → 메아리가 짝을 태운다 / 메아리가 돌을 밟아 준다
+    const u = (g.t * 0.4) % 1, gx = -0.6 + u * 1.2;
+    ctx.globalAlpha = 0.45; head(gx, 0.28, 0.2, A); ctx.globalAlpha = 1;
+    if (kind === 'echo') { head(gx, -0.12, 0.2, B); ctx.strokeStyle = A; ctx.lineWidth = 0.05; ctx.setLineDash([0.1, 0.08]); ctx.beginPath(); ctx.moveTo(-0.8, 0.52); ctx.lineTo(0.8, 0.52); ctx.stroke(); ctx.setLineDash([]); }
+    else { ctx.fillStyle = W; rr(ctx, 0.3, 0.46, 0.5, 0.12, 0.05); ctx.fill(); rr(ctx, -0.7, 0.46, 0.5, 0.12, 0.05); ctx.fill(); head(-0.45, 0.26, 0.2, B); }
+    ctx.strokeStyle = '#ff8fa8'; ctx.lineWidth = 0.05; ctx.beginPath(); ctx.arc(0.62, -0.42, 0.13, 0, TAU); ctx.stroke(); ctx.fillStyle = '#ff8fa8'; ctx.beginPath(); ctx.arc(0.62, -0.42, 0.06, 0, TAU); ctx.fill();
+  } else if (kind === 'size') { // 내가 커지면 짝이 작아진다
+    const k = 0.5 + 0.5 * Math.sin(g.t * 1.6); head(-0.38, 0.2 - k * 0.12, 0.16 + k * 0.14, A); head(0.42, 0.2 - (1 - k) * 0.12, 0.16 + (1 - k) * 0.14, B);
+    arrow(-0.38, -0.28, 0, k > 0.5 ? -0.2 : 0.2); arrow(0.42, -0.28, 0, k > 0.5 ? 0.2 : -0.2);
+  } else if (kind === 'follow') { // 짝이 걸으면 내 발판이 따라온다
     head(-0.4, -0.2 + bob * 0.5, 0.2, A); ctx.fillStyle = W; rr(ctx, -0.72, 0.02, 0.64, 0.12, 0.05); ctx.fill();
     head(-0.4, 0.42, 0.18, B); arrow(0.0, 0.42, 0.5, 0); arrow(0.0, 0.08, 0.5, 0);
   } else if (kind === 'box') { // 짝이 상자를 밀어 주면 → 그걸 밟고 건넌다

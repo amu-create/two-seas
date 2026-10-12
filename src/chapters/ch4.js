@@ -1,6 +1,6 @@
 // 4장 · 어둠의 물길 — 이 장의 도구: 크기 바꾸기. 단추를 누르면 내가 커지고 짝이 작아진다(늘 반대).
 // 큰 고양이: 높이 뛰고, 무거운 돌을 누르고, 무거운 상자를 민다. 작은 고양이: 낮은 굴을 지나고, 얇은 다리를 건넌다.
-// 가운데부터는 어둡다: 화면에는 짝의 둘레만 비친다.
+// 가운데는 어둡고(짝의 둘레만 비친다), 마지막 구간은 한 사람의 화면이 거울처럼 뒤집힌다.
 import { Links } from '../puzzles/worlds.js';
 import { Box } from '../puzzles/box.js';
 import { Sizes } from '../puzzles/sizes.js';
@@ -12,7 +12,9 @@ export function makeChapter4() {
   return chapter({
     id: 4, title: '어둠의 물길', subtitle: '4장 · 커졌다 작아졌다',
     endTitle: '4장 · 끝', endLine: '멀리 두 개의 달이 떠오른다', endNext: '마지막 장에서 계속',
-    stack: true, tool: 'size', sizes: true, dark: { x0: 40, x1: 126.5 },
+    stack: true, tool: 'size', sizes: true, dark: { x0: 40, x1: 90 },
+    // 거울 바다: 이 구간에서는 빛의 눈을 가진 쪽 화면만 좌우가 뒤집힌다 → "오른쪽으로!"가 서로 반대로 들린다
+    mirror: { x0: 92, x1: 128, world: 0 },
     length: 148, bounds: { min: -6.6, max: 144.6 },
     solids: [
       ground(-8, 24), ground(24, 34, 'stone', 2.75), ground(34, 36, 'stone', 1.4), ground(36, 46),
@@ -45,10 +47,10 @@ export function makeChapter4() {
       b: { when: (g) => g.bothPast(36.4), dur: 2.0 },
       c: { when: (g) => g.bothPast(52.6), dur: 2.0 },
       d: { when: (g) => g.bothPast(83.6), dur: 2.0 },
-      e: { when: (g) => g.bothPast(109.6), dur: 2.0 },
+      e: { when: (g) => g.bothPast(109.6), dur: 2.0 },   // (거울 바다 안)
       f: { when: (g) => g.bothPast(127.2), dur: 2.4 },
     },
     end: { when: (g) => g.bothIn(134.4, 141.5), spots: [136.95, 138.05], y: 0, camX: 137.5, flip: false },
-    drawBack(g, ctx) { P.boat(g, ctx, -3.4); P.sign(g, ctx, 8.6, 0, 'size'); P.sign(g, ctx, 38.4, 0, 'dark'); P.moonArch(g, ctx, 137.5); },
+    drawBack(g, ctx) { P.boat(g, ctx, -3.4); P.sign(g, ctx, 8.6, 0, 'size'); P.sign(g, ctx, 38.4, 0, 'dark'); P.sign(g, ctx, 90.6, 0, 'mirror'); P.moonArch(g, ctx, 137.5); },
   });
 }

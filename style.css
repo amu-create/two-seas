@@ -127,3 +127,7 @@ h1 { font-size: clamp(30px, 11vh, 70px); }
 #btnMic.peer i { display: block; }
 #toast { position: fixed; z-index: 30; top: calc(env(safe-area-inset-top, 0px) + 52px); right: calc(env(safe-area-inset-right, 0px) + 10px); max-width: 62vw; padding: 8px 14px; border-radius: 14px; background: rgba(10, 16, 30, 0.82); border: 1px solid rgba(255, 255, 255, 0.18); font-size: 12px; line-height: 1.5; letter-spacing: 0.02em; pointer-events: none; transition: opacity 0.3s; }
 #toast.off { opacity: 0; }
+
+/* 거울 바다: 한 사람의 화면만 좌우가 뒤집힌다 */
+#game, #bg { transition: transform 0.55s cubic-bezier(.6,.05,.3,1); }
+body.mirror #game, body.mirror #bg { transform: scaleX(-1); }

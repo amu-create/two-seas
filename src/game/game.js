@@ -88,6 +88,7 @@ export class Game {
   standins(mine) { const out = []; for (const p of this.chapter.puzzles) if (p.standins) p.standins(this, mine, out); return out; }
   // 장 바꾸기: 지도·퍼즐을 새로 만들고 고양이를 출발점에 세운다
   setChapter(n) {
+    if (this.mirrored) { this.mirrored = false; document.body.classList.remove('mirror'); }
     this.chapter = makeChapter(n);
     this.decor = makeDecor(this.chapter.length, 7 + this.chapter.id);
     this.lampLit = this.chapter.checkpoints.map(() => 0);
@@ -299,6 +300,8 @@ export class Game {
     const dt = Math.max(0, Math.min(dtRaw, 1 / 20)); // 첫 프레임은 시간이 거꾸로 올 수도 있다
     this.t += dt; this.frame++;
     const inp = this.input.read();
+    if (this.mirrored) inp.x = -inp.x; // 거울 바다: 화면이 뒤집혀 있으니 손가락 방향도 화면 기준으로
+    this.lampOn = false;
     this.inp = inp;
     const linked = !!this.link && this.W.phase !== 'lobby';
     this.paused = linked && this.link.status !== 'ok';
@@ -331,6 +334,10 @@ export class Game {
     const me = this.me, other = this.other, ch = this.chapter;
     if (!ch.sizes) { me.size = 1; other.size = 1; }
     me.inBubble = false;
+    { // 거울 바다: 이 구간에서는 한 사람의 화면만 좌우가 뒤집힌다 → "오른쪽!"이 서로 반대
+      const m = ch.mirror, on = !!(m && !this.W.end && me.x > m.x0 && me.x < m.x1 && this.sees(m.world));
+      if (on !== !!this.mirrored) { this.mirrored = on; document.body.classList.toggle('mirror', on); this.sound('swap', { vol: 0.5, rate: on ? 1.2 : 0.9 }); haptics.buzz('open', true); }
+    }
     const solids = this._solids();
     // 빛의 실: 너무 멀어지지 않게 (둘이 항상 한 화면에)
     const viewW = this.view.right - this.view.left;
@@ -548,7 +555,7 @@ export class Game {
     tx = Math.max(tx, b.min + halfW - 1.4);
     c.x = Math.abs(tx - c.x) > 30 ? tx : damp(c.x, tx, 3.6, dt);
     const avgY = Math.max(0, o.present && o.state === 'play' ? (me.y + o.y) / 2 : me.y); // 높은 곳에 오르면 화면도 따라 올라간다
-    const ty = CAM_Y / c.zoom + clamp(avgY * 0.78, 0, 9) + (c.zoom > 1 ? 0.15 : 0);
+    const ty = CAM_Y / c.zoom + clamp(avgY * 0.78, 0, 16) + (c.zoom > 1 ? 0.15 : 0);
     c.y = damp(c.y, ty, 3, dt);
     v.s = s; v.cx = c.x; v.cy = c.y; v.zoom = c.zoom;
     v.left = c.x - halfW; v.right = c.x + halfW;

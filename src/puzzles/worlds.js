@@ -32,7 +32,9 @@ export class Links {
       const keys = idx.map((i) => this.things[i].key), pool = [0, 1, 2, 3, 4, 5, 6, 7];
       for (let i = keys.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [keys[i], keys[j]] = [keys[j], keys[i]]; }
       for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-      idx.forEach((ti, n) => { P.key[ti] = keys[n]; P.tm[ti] = pool[n]; P.km[keys[n]] = pool[n]; });
+      idx.forEach((ti, n) => { P.key[ti] = keys[n]; P.tm[ti] = pool[n]; P.km[keys[n]] = this.codebook ? pool[idx.length + n] : pool[n]; });
+      // 해독표: 불의 문양과 돌의 문양이 서로 다르다. 어느 불이 어느 돌인지는 돌 쪽 세계의 표에만 적혀 있다 (줄 순서도 섞는다)
+      if (this.codebook) { P.rows = idx.map((ti) => [P.tm[ti], P.km[P.key[ti]]]); for (let i = P.rows.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [P.rows[i], P.rows[j]] = [P.rows[j], P.rows[i]]; } }
     }
     return (this._plan = P);
   }
@@ -105,6 +107,20 @@ export class Links {
       return;
     }
     if (layer !== 'back') return;
+    // 해독표 (돌 쪽 세계에만): 불의 문양 → 돌의 문양
+    const cb = this.codebook, P0 = this.plan(g);
+    if (cb && P0.rows && g.sees(cb.world)) {
+      const X = cb.x, Y = -(cb.y || 0), n = P0.rows.length, H = 0.62 * n + 0.5;
+      ctx.fillStyle = pal.woodDark; ctx.fillRect(X - 0.07, Y - 1.2, 0.14, 1.2);
+      ctx.fillStyle = pal.wood; roundRect(ctx, X - 1.0, Y - 1.2 - H, 2.0, H, 0.14); ctx.fill();
+      ctx.strokeStyle = pal.woodHi; ctx.lineWidth = 0.04; ctx.globalAlpha = 0.8; roundRect(ctx, X - 0.92, Y - 1.12 - H, 1.84, H - 0.16, 0.1); ctx.stroke(); ctx.globalAlpha = 1;
+      P0.rows.forEach(([a, b], j) => {
+        const ry = Y - 1.2 - H + 0.56 + j * 0.62;
+        drawGlyph(ctx, a, X - 0.52, ry, 0.2, '#ffd0f4', 0.06);
+        ctx.strokeStyle = pal.warm; ctx.lineWidth = 0.05; ctx.beginPath(); ctx.moveTo(X - 0.18, ry); ctx.lineTo(X + 0.18, ry); ctx.lineTo(X + 0.08, ry - 0.08); ctx.moveTo(X + 0.18, ry); ctx.lineTo(X + 0.08, ry + 0.08); ctx.stroke();
+        drawGlyph(ctx, b, X + 0.52, ry, 0.2, pal.raw('warm'), 0.06);
+      });
+    }
     // 누름돌
     this.keys.forEach((k, i) => {
       if (!this.mine(g, k)) return;

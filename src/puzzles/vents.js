@@ -14,6 +14,8 @@ export class Vents {
   constructor(cfg) { Object.assign(this, { vents: [], wave: null, seenBy: 1 }, cfg); this.flash = -9; this.flashAt = null; }
   init() { return {}; }
   tint(g) { return TINT[this.seenBy === 'both' ? g.viewRole : this.seenBy] || TINT[1]; }
+  // 시험용 봇·안개: 이 불이 지금 이 폰에서 보이는가
+  visible(g) { return this.fog ? (!g.sees(this.seenBy) && g.lampOn) : g.sees(this.seenBy); }
 
   ventPhase(v, tc) {
     const u = ((tc + v.phase) % v.period + v.period) % v.period;
@@ -58,8 +60,9 @@ export class Vents {
 
   draw(g, ctx, layer) {
     const pal = g.pal, tc = g.tc, sees = g.sees(this.seenBy), T = this.tint(g);
+    const fog = this.fog, lit = fog && !sees && g.lampOn; // 안개: 불의 주인은 못 보고, 짝이 등불을 켜야 보인다
     if (layer === 'back') {
-      if (!sees) return;
+      if (!sees && !fog) return; // 안개 구간의 불구멍은 둘 다 보인다 (어디인지는 알지만 언제인지는 모른다)
       for (const v of this.vents) { // 틈(격자)
         const y = -(v.y || 0);
         ctx.fillStyle = rgba('#000000', 0.45);
@@ -76,7 +79,12 @@ export class Vents {
     const flashU = (g.t - this.flash) / 0.45;
     for (const v of this.vents) {
       const p = this.ventPhase(v, tc), y = -(v.y || 0), H = v.h || 2.3;
-      if (sees) {
+      if (fog && sees) { // 내 불인데 안개에 가려 안 보인다: 닿는 순간만 비친다
+        if (flashU >= 0 && flashU < 1 && this.flashAt != null && this.flashAt > v.x - 0.3 && this.flashAt < v.x + v.w + 0.3) flame(ctx, v.x, y, v.w, H, (1 - flashU) * 0.6, g.t, v.x, T);
+        continue;
+      }
+      if (sees || lit) {
+        if (lit) ctx.globalAlpha = 0.9;
         if (p.warn > 0) {
           const wg = ctx.createLinearGradient(0, y - 0.7 * p.warn, 0, y);
           wg.addColorStop(0, rgba(T[4], 0)); wg.addColorStop(1, rgba(T[4], 0.55 * p.warn));
@@ -89,6 +97,7 @@ export class Vents {
           ctx.globalAlpha = 1;
         }
         if (p.active) flame(ctx, v.x, y, v.w, H * p.k, p.k, g.t, v.x, T);
+        ctx.globalAlpha = 1;
       } else if (flashU >= 0 && flashU < 1 && this.flashAt != null && this.flashAt > v.x - 0.3 && this.flashAt < v.x + v.w + 0.3) {
         flame(ctx, v.x, y, v.w, H, (1 - flashU) * 0.55, g.t, v.x, T); // 안 보이지만, 닿는 순간 잠깐 형체가 비친다
       }

@@ -6,7 +6,7 @@
 import { TAU, clamp, rgba, sat } from '../util.js';
 import { haptics } from '../game/haptics.js';
 
-const FORM = 0.55, SPEED = 1.25, RISE = 6.4, HOVER = 2.4, MAXN = 3; // 다 올라가서 2.4초 머문 뒤 터진다
+const FORM = 0.55, SPEED = 1.25, RISE = 6.4, HOVER = 2.4, MAXN = 2; // 한 사람이 띄울 수 있는 방울은 둘까지: 셋째를 불면 첫째가 터진다(짝이 타고 있어도!) // 다 올라가서 2.4초 머문 뒤 터진다
 
 export class Bubbles {
   constructor(cfg) { Object.assign(this, { winds: [] }, cfg); this.cool = 0; this.inside = null; this.prev = new Map(); this.prevY = new Map(); }
@@ -58,6 +58,11 @@ export class Bubbles {
   peek(g) { return { list: g.pz(this.id).list.map((b) => ({ by: b.by, ...this.pos(b, g.tc) })) }; }
   draw(g, ctx, layer) {
     const st = g.pz(this.id);
+    { // 사라진 방울: 터지는 모습
+      const ids = new Set(st.list.map((b) => b.n)), last = this._last || new Map();
+      for (const [n, p] of last) if (!ids.has(n) && p.alive && p.fade > 0.5) { g.fx.ring(p.x, p.y + 0.6, '#dff7ff', 1.0, 0.45); g.fx.burst('spark', p.x, p.y + 0.6, g.q.sparks(8), { speed: 2.2, color: '#dff7ff', life: 0.45 }); g.sound('pop', { x: p.x }); }
+      this._last = new Map(st.list.map((b) => [b.n, this.pos(b, g.tc)]));
+    }
     if (layer === 'back') { // 바람띠: 보이는 쪽에만
       for (const w of this.winds) {
         if (!g.sees(w.world)) continue;

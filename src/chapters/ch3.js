@@ -5,6 +5,7 @@ import { GlyphGate } from '../puzzles/glyph.js';
 import { Lift } from '../puzzles/lift.js';
 import { Links } from '../puzzles/worlds.js';
 import { Echo } from '../puzzles/echo.js';
+import { Lamp } from '../puzzles/lamp.js';
 import { Stars } from '../puzzles/stars.js';
 import { ground, cps, chapter } from './base.js';
 import * as P from '../render/props.js';
@@ -14,12 +15,12 @@ export function makeChapter3() {
     id: 3, title: '메아리의 탑', subtitle: '3장 · 내가 걸은 길이 너의 다리',
     endTitle: '3장 · 끝', endLine: '탑 너머는 빛이 닿지 않는 물길', endNext: '4장에서 계속',
     stack: false, tool: 'echo',
-    length: 124, bounds: { min: -6.6, max: 120.6 },
+    length: 138, bounds: { min: -6.6, max: 134.6 },
     solids: [
       ground(-8, 10), ground(20.6, 34), ground(34, 48, 'stone', 4.6), ground(58.6, 70, 'stone', 4.6),   // 틈은 10.6칸: 빛의 실(13칸)이 닿는 거리 안에서 녹화가 끝나야 한다
-      ground(70, 72, 'stone', 3.1), ground(72, 74, 'stone', 1.6), ground(74, 123),
+      ground(70, 72, 'stone', 3.1), ground(72, 74, 'stone', 1.6), ground(74, 137),
     ],
-    checkpoints: cps([2.9, 23.4, { x: 38.4, y: 4.6 }, { x: 61.0, y: 4.6 }, { x: 68.6, y: 4.6 }, 75.6, 86, 96, 107.6]),
+    checkpoints: cps([2.9, 23.4, { x: 38.4, y: 4.6 }, { x: 61.0, y: 4.6 }, { x: 68.6, y: 4.6 }, 75.6, 86, 95.4, 109.2, 121.6]),
     puzzles: [
       new Stars({ id: 'stars', list: [{ x: 5.5, y: 3.4, world: 0 }, { x: 41, y: 8.2, world: 1 }, { x: 89.8, y: 3.4, world: 0 }] }),   // 별조각 셋: 안 모아도 되지만, 이 장의 손발을 한 번 더 궁리해야 닿는다
       new Echo({ id: 'echo' }),
@@ -37,7 +38,12 @@ export function makeChapter3() {
       //    (그림자에게는 돌이 안 보인다 → "세 걸음 더… 거기서 멈춰"). 다음 문은 반대로.
       new Links({ id: 'd1', keys: [{ x: 78.2, world: 0 }, { x: 81.6, world: 0 }], things: [{ kind: 'door', world: 0, x: 84, w: 0.95, key: [0, 1], all: true, latch: true }] }),
       new Links({ id: 'd2', keys: [{ x: 88.2, world: 1 }, { x: 91.4, world: 1 }], things: [{ kind: 'door', world: 1, x: 94, w: 0.95, key: [0, 1], all: true, latch: true }] }),
-      new GlyphGate({ id: 'gate', beatId: 'g1', murals: [98.6, 100.6, 102.6], muralY: 3.0, deviceX: 104.3, gate: { x: 106, w: 0.95, h: 4.3 } }),
+      // ⑦ 안개 복도: 불이 세계마다 따로 솟는데, 안개 때문에 불의 주인은 자기 불을 못 본다.
+      //    짝이 발바닥 단추를 꾹 눌러 등불을 켜면 그 불이 보인다. 등불 기름은 12초뿐 → 아껴 켜며 "3, 2, 1, 지금!"
+      new Lamp({ id: 'lamp', x0: 96.6, x1: 107 }),
+      new Vents({ id: 'fogA', seenBy: 1, fog: true, vents: [{ x: 97.4, w: 1.6, period: 4.6, on: 1.7, phase: 0 }, { x: 101.8, w: 1.6, period: 4.6, on: 1.7, phase: 2.1 }] }),
+      new Vents({ id: 'fogB', seenBy: 0, fog: true, vents: [{ x: 99.6, w: 1.6, period: 4.6, on: 1.7, phase: 1.2 }, { x: 104.0, w: 1.6, period: 4.6, on: 1.7, phase: 3.3 }] }),
+      new GlyphGate({ id: 'gate', beatId: 'g1', murals: [112.6, 114.6, 116.6], muralY: 3.0, deviceX: 118.3, gate: { x: 120, w: 0.95, h: 4.3 } }),
     ],
     beats: {
       m1: { when: (g) => g.bothPast(21.2), dur: 2.2 },
@@ -46,9 +52,10 @@ export function makeChapter3() {
       e3: { when: (g) => g.bothPast(67.6) && g.me.y > 4 && g.other.y > 4, dur: 2.0 },
       d1: { when: (g) => g.bothPast(85.3), dur: 2.0 },
       d2: { when: (g) => g.bothPast(95.3), dur: 2.0 },
-      g1: { focus: 106.4, dur: 2.8 },
+      fog: { when: (g) => g.bothPast(106.8), dur: 2.0 },
+      g1: { focus: 120.4, dur: 2.8 },
     },
-    end: { when: (g) => g.pz('gate').open && g.bothIn(111.4, 118.5), spots: [113.95, 115.05], y: 0, camX: 114.5, flip: false },
-    drawBack(g, ctx) { P.boat(g, ctx, -3.4); P.sign(g, ctx, 6.4, 0, 'echo'); P.sign(g, ctx, 26.2, 0, 'crank'); P.sign(g, ctx, 76.2, 0, 'echo2'); P.wall(g, ctx, 97.4, 106.2); P.moonArch(g, ctx, 114.5); },
+    end: { when: (g) => g.pz('gate').open && g.bothIn(125.4, 132.5), spots: [127.95, 129.05], y: 0, camX: 128.5, flip: false },
+    drawBack(g, ctx) { P.boat(g, ctx, -3.4); P.sign(g, ctx, 6.4, 0, 'echo'); P.sign(g, ctx, 26.2, 0, 'crank'); P.sign(g, ctx, 76.2, 0, 'echo2'); P.sign(g, ctx, 96.2, 0, 'fog'); P.wall(g, ctx, 111.4, 120.2); P.moonArch(g, ctx, 128.5); },
   });
 }

@@ -29,10 +29,11 @@ export function makeChapter1() {
       new Box({ id: 'box1', x: 37.3, min: 30.3, max: 40.5 }),
       // ② 그림자의 세계에만 있는 문. 여는 돌은 빛의 세계에만 있다.
       new Links({ id: 'door1', keys: [{ x: 49.6, world: 0 }], things: [{ kind: 'door', world: 1, x: 45.6, w: 0.95, key: 0 }] }),
-      // ③ 불의 복도: 불 셋은 그림자의 세계에, 끄는 돌 셋은 빛의 세계에. 같은 문양끼리 이어져 있고, 짝과 문양은 판마다 바뀐다.
+      // ③ 불의 복도: 불 셋은 그림자의 세계에, 끄는 돌 셋은 빛의 세계에. 불의 문양 → (해독표) → 돌의 문양. 짝과 문양은 판마다 바뀐다.
+      //    그림자: "첫 불은 소용돌이야" → 빛: (표를 보고) "소용돌이는… 물방울 돌!"
       // ④ 그 뒤의 문은 빛의 세계에만 있고, 여는 돌은 그림자의 세계에만 있다.
       new Links({
-        id: 'hall', shuffle: true,
+        id: 'hall', shuffle: true, codebook: { x: 70.4, world: 0 },   // 불의 문양과 돌의 문양이 다르다: 짝을 지은 표는 빛의 세계에만
         keys: [{ x: 66.4, world: 0, mark: 0 }, { x: 67.7, world: 0, mark: 2 }, { x: 69.0, world: 0, mark: 5 }, { x: 71.6, world: 1 }],
         things: [
           { kind: 'flame', world: 1, x: 58.4, w: 1.6, key: 1, mark: 2 },

@@ -8,7 +8,7 @@ import { PHYS } from '../game/player.js';
 import { haptics } from '../game/haptics.js';
 
 export class Box {
-  constructor(cfg) { Object.assign(this, { y: 0, w: 1.3, h: 0.9 }, cfg); this.bx = this.x; this.pushT = -9; this.sentT = -9; this.moving = 0; this.rumble = 0; }
+  constructor(cfg) { Object.assign(this, { y: 0, w: 1.3, h: 0.9 }, cfg); this.bx = this.x; this.pushT = -9; this.sentT = -9; this.moving = 0; this.rumble = 0; this.seq = Math.floor(Math.random() * 1e6); }
   init() { return { x: this.x }; }
   solids(g, out) { out.push({ x: this.bx, y: this.y, w: this.w, h: this.h, box: true }); }
   peek() { return { x: this.bx, w: this.w, min: this.min, max: this.max }; }
@@ -19,19 +19,25 @@ export class Box {
       const touch = ix > 0 ? Math.abs(me.x + hw - this.bx) < 0.07 : Math.abs(me.x - hw - (this.bx + this.w)) < 0.07;
       if (touch) {
         const nb = clamp(this.bx + ix * 2.1 * dt, this.min, this.max);
-        if (nb !== this.bx) { this.bx = nb; pushed = true; this.pushT = g.t; if (g.t - this.sentT > 0.1) { this.sentT = g.t; g.act('box', { id: this.id, x: this.bx }); } }
+        if (nb !== this.bx) { this.bx = nb; pushed = true; this.pushT = g.t; if (g.t - this.sentT > 0.1) { this.sentT = g.t; g.act('box', { id: this.id, x: this.bx, s: Date.now() + (++this.seq % 1000) / 1000 }); } }
         me.pushing = true;
       }
     }
     if (!pushed) {
-      if (this.pushT > 0 && g.t - this.pushT < 0.4) { if (this.sentT < this.pushT) { this.sentT = g.t; g.act('box', { id: this.id, x: this.bx }); } } // 손을 뗀 뒤 마지막 자리를 한 번 더 알린다
+      if (this.pushT > 0 && g.t - this.pushT < 1.0) { if (g.t - this.sentT > 0.25) { this.sentT = g.t; g.act('box', { id: this.id, x: this.bx, s: Date.now() + (++this.seq % 1000) / 1000 }); } } // 손을 뗀 뒤 1초 동안 마지막 자리를 몇 번 더 알린다 (중계 연결에서 하나가 빠져도)
       else { const d = st.x - this.bx; if (Math.abs(d) > 0.002) { this.bx = Math.abs(d) > 4 ? st.x : damp(this.bx, st.x, 12, dt); pushed = Math.abs(d) > 0.03; } }
     }
     this.moving = damp(this.moving, pushed ? 1 : 0, 10, dt);
     if (pushed) { this.rumble += dt; if (this.rumble > 0.34) { this.rumble = 0; g.sound('step', { x: this.bx, vol: 0.5, rate: 0.6 }); } }
     if (g.t - this.pushT < 0.05) { this.hz = (this.hz || 0) + dt; if (this.hz > 0.16) { this.hz = 0; haptics.buzz('push'); } } // 내가 밀고 있는 동안 드르륵
   }
-  host(g, st, from, type, d) { if (type === 'box' && d.id === this.id) { st.x = clamp(+d.x || 0, this.min, this.max); return true; } return false; }
+  host(g, st, from, type, d) {
+    if (type !== 'box' || d.id !== this.id) return false;
+    // 중계 연결에서는 소식이 뒤바뀐 순서로 올 수 있다 → 같은 사람이 보낸 것 중 더 늦게 보낸 것만 받는다
+    const k = 's' + from; if (d.s != null && st[k] != null && d.s <= st[k]) return false;
+    if (d.s != null) st[k] = d.s;
+    st.x = clamp(+d.x || 0, this.min, this.max); return true;
+  }
   onFx() {}
   draw(g, ctx, layer) {
     if (layer !== 'back') return;

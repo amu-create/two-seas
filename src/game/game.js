@@ -1,5 +1,6 @@
 // 게임 본체: 한 프레임마다 "입력 → 움직임 → 퍼즐 → 연출 → 그리기 → 짝에게 보내기"
 // 규칙의 주인: 내 고양이의 위치는 내 폰이, 세계의 상태(퍼즐 진행)는 방장(1P) 폰이 정한다.
+import { Signals } from './signals.js';
 import { haptics } from './haptics.js';
 import { clamp, lerp, damp, sat, smooth, smoothstep, easeOut, easeInOut, TAU, rgba } from '../util.js';
 import { Player, RemotePlayer, PHYS } from './player.js';
@@ -36,6 +37,7 @@ export class Game {
     this.chapter = chapter;
     this.decor = makeDecor(chapter.length, 7 + chapter.id);
     this.fx = new Fx();
+    this.signals = new Signals(this);
     this.link = null; this.isHost = true; this.room = null;
     this.role = 0;
     this.t = 0; this.frame = 0;
@@ -117,6 +119,7 @@ export class Game {
     link.on('act', (d) => { if (this.isHost) this._hostAct(1 - this.role, d.type, d.data); });
     link.on('fx', (d) => { if (d.x !== this.role) this._fx(d.n, d.d); });
     link.on('emote', (d) => this._emote(this.other, d));
+    link.on('sig', (d) => this.signals.show(d, false));
     link.on('resume', (d) => { // 방장이 새로고침해서 기억을 잃었을 때: 손님이 기억하던 세계로 이어간다
       if (this.isHost && d && d.W && d.W.rev > this.W.rev && d.W.ch === this.W.ch) { this.W = d.W; this.W.rev++; this._afterWorld(); this._sendWorld(); }
     });
@@ -616,6 +619,7 @@ export class Game {
     this.fx.draw(ctx);
     drawWater(ctx, v, pal, this.t, true);
     this.chapter.drawFront(this, ctx);
+    this.signals.drawWorld(ctx);
     drawFore(ctx, v, pal, this.decor, this.t);
 
     // --- 화면 고정 요소 ---
@@ -629,6 +633,7 @@ export class Game {
     }
     if (this.letter > 0.01) { const h = v.H * 0.085 * this.letter; ctx.fillStyle = '#02040c'; ctx.fillRect(0, 0, v.W, h); ctx.fillRect(0, v.H - h, v.W, h); }
     for (const p of this.chapter.puzzles) p.draw(this, ctx, 'ui');
+    this.signals.drawUI(ctx);
     this._cards(ctx);
   }
 

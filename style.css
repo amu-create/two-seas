@@ -131,3 +131,16 @@ h1 { font-size: clamp(30px, 11vh, 70px); }
 /* 거울 바다: 한 사람의 화면만 좌우가 뒤집힌다 */
 #game, #bg { transition: transform 0.55s cubic-bezier(.6,.05,.3,1); }
 body.mirror #game, body.mirror #bg { transform: scaleX(-1); }
+
+/* 신호 메뉴: 화면을 길게 누르면 뜬다 */
+#wheel { position: fixed; z-index: 40; width: 0; height: 0; pointer-events: none; }
+#wheel.hidden { display: none; }
+#wheel > div { position: absolute; left: -26px; top: -26px; width: 52px; height: 52px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(8, 14, 30, 0.82); border: 1.5px solid rgba(255, 255, 255, 0.3); font-size: 13px; font-weight: 600; letter-spacing: 0.02em; color: #fff; transition: transform 0.12s, background 0.12s; }
+#wheel > div.c { width: 46px; height: 46px; left: -23px; top: -23px; font-size: 10px; }
+#wheel > div.c b { font-size: 17px; line-height: 1; }
+#wheel > div.on { background: rgba(140, 255, 210, 0.42); border-color: #a5ffdc; box-shadow: 0 0 16px rgba(130, 255, 210, 0.6); }
+#wheel > div.p.on { scale: 1.15; }
+/* 시작 화면: 함께 있어요 / 떨어져 있어요 */
+.mode { display: flex; gap: 1.4vw; justify-content: center; margin: -1.2vh 0 2.4vh; }
+.mode button { padding: 1.1vh 2.6vw; border-radius: 3vh; border: 1.5px solid rgba(255, 255, 255, 0.25); background: rgba(255, 255, 255, 0.05); font-size: clamp(10px, 3vh, 14px); letter-spacing: 0.04em; opacity: 0.75; }
+.mode button.sel { border-color: #ffe2a0; background: rgba(255, 226, 160, 0.16); opacity: 1; box-shadow: 0 0 14px rgba(255, 226, 160, 0.35); }

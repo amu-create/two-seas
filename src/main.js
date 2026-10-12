@@ -33,7 +33,7 @@ const voice = {
     b.classList.toggle('na', !!l && !l.canVoice && !this.stream);
     b.classList.toggle('on', !!this.stream);
     b.classList.toggle('peer', this.peerOn);
-    if (l && l.status === 'ok' && this.stream && this._told !== l.mode) { this._told = l.mode; if (l.mode !== 'p2p') toast('지금은 중계 연결이라 목소리가 전달되지 않아요'); }
+    if (l && l.status === 'ok' && this.stream && this._told !== l.mode) { this._told = l.mode; if (l.mode !== 'p2p') toast('지금은 중계 연결이라 게임 안 음성이 안 돼요. 전화를 스피커로 켜 주세요'); }
   },
   async toggle() {
     const l = this.link; if (!l) return;
@@ -50,6 +50,31 @@ const voice = {
   },
 };
 $('#btnMic').addEventListener('click', () => voice.toggle());
+// 마이크를 미리 받아 둔다 (떨어져 있어요를 고른 순간: 버튼을 누른 순간이어야 권한 창이 뜬다)
+voice.prepare = async function () {
+  if (this.stream || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+  try { this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false }); if (this.link) await this.link.setMic(this.stream.getAudioTracks()[0]); } catch (e) { this.stream = null; this.denied = true; }
+  this.refresh();
+};
+
+// ---------- 나란히 앉았어요 / 떨어져 있어요 ----------
+let mode = 'near';
+try { mode = localStorage.getItem('twoseas.mode') || 'near'; } catch (e) { /* 무시 */ }
+const MODE_TIP = { near: '서로 화면은 보여 주지 말고, 말로만 알려 주세요', far: '게임 안 음성 대화를 켜요 · 안 되면 전화를 스피커로' };
+function renderMode() { for (const b of document.querySelectorAll('#modeRow button')) b.classList.toggle('sel', b.dataset.mode === mode); $('#modeTip').textContent = MODE_TIP[mode]; }
+for (const b of document.querySelectorAll('#modeRow button')) b.addEventListener('click', () => { mode = b.dataset.mode; try { localStorage.setItem('twoseas.mode', mode); } catch (e) { /* 무시 */ } renderMode(); if (mode === 'far') voice.prepare(); });
+renderMode();
+let greeted = false;
+function greet() { // 처음 이어졌을 때 한 번만
+  if (greeted) return; greeted = true;
+  let seen = false; try { seen = !!localStorage.getItem('twoseas.sigHint'); localStorage.setItem('twoseas.sigHint', '1'); } catch (e) { /* 무시 */ }
+  const msgs = [];
+  if (mode === 'near') msgs.push('화면은 서로 보여 주지 말고, 말로만!');
+  else if (voice.stream && link && link.mode === 'p2p') msgs.push('음성 대화가 켜졌어요. 짝도 켜면 서로 들려요');
+  else msgs.push('게임 안 음성은 직접 연결일 때만 돼요. 전화를 스피커로 켜 주세요');
+  if (!seen) msgs.push('화면을 길게 누르면 신호를 보낼 수 있어요 (여기!·지금!·멈춰!·3·2·1)');
+  msgs.forEach((m, i) => setTimeout(() => toast(m), 600 + i * 3600));
+}
 
 const ui = {
   onLink(status, mode) {
@@ -58,7 +83,7 @@ const ui = {
     net.querySelector('span').textContent = status === 'ok' ? (mode === 'p2p' ? '직접 연결' : '중계 연결') : '연결 찾는 중';
     const playing = game.W.phase !== 'lobby';
     $('#wait').classList.toggle('hidden', !(playing && status !== 'ok'));
-    if (status === 'ok') hideLobby();
+    if (status === 'ok') { hideLobby(); setTimeout(greet, 3500); }
     if (status === 'full') { $('#joinStatus').textContent = '방이 가득 찼어요'; }
     voice.refresh();
   },

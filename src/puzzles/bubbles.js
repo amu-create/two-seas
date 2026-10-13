@@ -6,7 +6,7 @@
 import { TAU, clamp, rgba, sat, damp } from '../util.js';
 import { haptics } from '../game/haptics.js';
 
-const FORM = 0.4, SPEED = 2.0, RISE = 6.4, HOVER = 2.2, MAXN = 2, STEER = 2.6, REACH = 2.8;
+const FORM = 0.4, SPEED = 1.4, RISE = 6.4, HOVER = 2.2, MAXN = 2, STEER = 2.6, REACH = 2.8;
 
 export class Bubbles {
   constructor(cfg) {

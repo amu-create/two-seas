@@ -77,7 +77,11 @@ export function sign(g, ctx, x, y, kind) {
   const head = (hx, hy, s, col) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(hx - s * 0.62, hy - s * 0.72, s * 0.34, 0, TAU); ctx.arc(hx + s * 0.62, hy - s * 0.72, s * 0.34, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.ellipse(hx, hy, s, s * 0.82, 0, 0, TAU); ctx.fill(); };
   const arrow = (ax, ay, dx, dy) => { ctx.strokeStyle = W; ctx.fillStyle = W; ctx.lineWidth = 0.06; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + dx, ay + dy); ctx.stroke(); const a = Math.atan2(dy, dx); ctx.beginPath(); ctx.moveTo(ax + dx + Math.cos(a) * 0.12, ay + dy + Math.sin(a) * 0.12); ctx.lineTo(ax + dx + Math.cos(a + 2.5) * 0.14, ay + dy + Math.sin(a + 2.5) * 0.14); ctx.lineTo(ax + dx + Math.cos(a - 2.5) * 0.14, ay + dy + Math.sin(a - 2.5) * 0.14); ctx.closePath(); ctx.fill(); };
   const bob = Math.sin(g.t * 2.2) * 0.04;
-  if (kind === 'fog') { // 안개 속 내 불은 안 보인다 → 짝이 등불을 켜 준다
+  if (kind === 'needle') { // 바늘로 방울을 터뜨려 높이 뛴다 / 앞을 찔러 짝의 거품벽을 터뜨린다
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 0.05; ctx.beginPath(); ctx.arc(-0.35, 0.18, 0.32, 0, TAU); ctx.stroke(); head(-0.35, 0.22, 0.17, A);
+    ctx.strokeStyle = W; ctx.lineWidth = 0.06; ctx.beginPath(); ctx.moveTo(-0.05, 0.0); ctx.lineTo(0.3, -0.25); ctx.stroke(); arrow(-0.35, -0.25, 0, -0.32);
+    ctx.fillStyle = 'rgba(233,246,255,0.7)'; for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.arc(0.62, -0.3 + k * 0.22, 0.1, 0, TAU); ctx.fill(); }
+  } else if (kind === 'fog') { // 안개 속 내 불은 안 보인다 → 짝이 등불을 켜 준다
     ctx.fillStyle = 'rgba(232,242,255,0.55)'; for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.arc(-0.45 + k * 0.3, 0.05 + Math.sin(g.t + k) * 0.04, 0.24, 0, TAU); ctx.fill(); }
     head(-0.3, 0.3, 0.17, A); head(0.5, 0.25, 0.17, B); ctx.fillStyle = '#ffe2a0'; ctx.beginPath(); ctx.ellipse(0.62, -0.18, 0.09, 0.12, 0, 0, TAU); ctx.fill();
     ctx.strokeStyle = '#ffe2a0'; ctx.lineWidth = 0.04; ctx.globalAlpha = 0.5 + 0.5 * Math.sin(g.t * 3); ctx.beginPath(); ctx.moveTo(0.5, -0.12); ctx.lineTo(-0.2, -0.3); ctx.stroke(); ctx.globalAlpha = 1;

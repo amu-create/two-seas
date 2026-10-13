@@ -128,6 +128,7 @@ export class Input {
       pull: '<path d="M4 17c4-1 6-5 9-6M13 11l-4-.5M13 11l-1.5 3.8"/><circle cx="18" cy="8" r="3"/>',
       bubble: '<circle cx="12" cy="11" r="6.5"/><path d="M9.5 8.5a3.5 3.5 0 012.5-1"/><circle cx="18.5" cy="18.5" r="1.8"/>',
       echo: '<circle cx="9" cy="12" r="4.2"/><path d="M15.5 8a6 6 0 010 8M18.5 5.5a10 10 0 010 13"/>',
+      needle: '<path d="M5 19L17.5 6.5"/><path d="M16 5l3 3"/><circle cx="18.6" cy="5.4" r="1.6"/><path d="M3.5 20.5l2-1"/>',
       size: '<rect x="3.5" y="12.5" width="6" height="6" rx="1.5"/><rect x="11" y="5" width="9.5" height="13.5" rx="2.5"/><path d="M6.5 10V6.5M4.8 8.2l1.7-1.7 1.7 1.7"/>',
     };
     el.innerHTML = `<svg viewBox="0 0 24 24">${ICON[tool] || ICON.pull}</svg>`;

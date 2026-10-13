@@ -257,7 +257,7 @@ function drawQr(text) {
 let chosen = Math.min(CHAPTERS.length, loadProgress() + 1);
 if (qs.get('ch')) chosen = Math.max(1, Math.min(CHAPTERS.length, Number(qs.get('ch')) || 1));
 function renderChapters() {
-  const box = $('#chapters'), open = qs.has('unlock') ? CHAPTERS.length : Math.min(CHAPTERS.length, loadProgress() + 1);
+  const box = $('#chapters'), open = CHAPTERS.length; // 장은 언제나 다 고를 수 있다 (깬 기록은 별·시간으로만 남긴다)
   box.innerHTML = '';
   CHAPTER_NAMES.forEach((name, i) => {
     const n = i + 1, b = document.createElement('button');

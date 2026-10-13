@@ -336,7 +336,7 @@ export class Game {
   _phys(dt, inp, first) {
     const me = this.me, other = this.other, ch = this.chapter;
     if (!ch.sizes) { me.size = 1; other.size = 1; }
-    me.inBubble = false;
+    me.inBubble = false; this.steerLock = false; this.dtLast = dt;
     { // 거울 바다: 이 구간에서는 한 사람의 화면만 좌우가 뒤집힌다 → "오른쪽!"이 서로 반대
       const m = ch.mirror, on = !!(m && !this.W.end && me.x > m.x0 && me.x < m.x1 && this.sees(m.world));
       if (on !== !!this.mirrored) { this.mirrored = on; document.body.classList.toggle('mirror', on); this.sound('swap', { vol: 0.5, rate: on ? 1.2 : 0.9 }); haptics.buzz('open', true); }
@@ -354,7 +354,7 @@ export class Game {
     me.pulling = !!(tool === 'pull' && inp.pull && me.ground && me.state === 'play' && other.present);
     if ((me.pulling || (other.pulling && me.pulled)) && Math.floor(this.t * 7) !== Math.floor((this.t - dt) * 7)) haptics.buzz('pull');
     const ext = other.pulling && other.state === 'play' && !me.pulling ? { pullTo: { x: other.x, y: other.y } } : null;
-    me.update(dt, pinp, solids, lim, ext);
+    me.update(dt, this.steerLock ? { ...pinp, x: 0 } : pinp, solids, lim, ext); // 방울 안: ←→는 방울을 몬다
     // 목말: 짝의 머리 위에 가만히 서 있으면 짝에게 붙어서 실려 간다 (움직이거나 뛰면 떨어진다)
     {
       const can = ch.stack && other.present && other.state === 'play' && me.state === 'play' && !me.inBubble; // 방울 안에 있을 때는 짝의 머리에 붙지 않는다

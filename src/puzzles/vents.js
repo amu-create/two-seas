@@ -17,7 +17,8 @@ export class Vents {
   // 시험용 봇·안개: 이 불이 지금 이 폰에서 보이는가
   visible(g) { return this.fog ? (!g.sees(this.seenBy) && g.lampOn) : g.sees(this.seenBy); }
 
-  ventPhase(v, tc) {
+  ventPhase(v, tc, g) {
+    if (g && g.localT) tc = g.localT(this.id + ':' + this.vents.indexOf(v)); // 시간 멈춤에 걸렸으면 이 불만 시계가 멈춘다
     const u = ((tc + v.phase) % v.period + v.period) % v.period;
     const warn = 0.7;
     if (u < v.on) return { active: true, k: Math.min(1, u / 0.12, (v.on - u) / 0.15), activeIn: 0, clearIn: v.on - u };
@@ -35,8 +36,9 @@ export class Vents {
     return out;
   }
   // 시험용 봇이 쓰는 정보: 지금 위험한 구역들
-  hazards(tc, g) { return this.harmless || (g && !g.sees(this.seenBy)) ? [] : this.vents.map((v) => { const p = this.ventPhase(v, tc); return { x0: v.x, x1: v.x + v.w, y0: v.y || 0, y1: (v.y || 0) + (v.h || 2.3), active: p.active, activeIn: p.activeIn, clearIn: p.clearIn }; }); }
+  hazards(tc, g) { return this.harmless || (g && !g.sees(this.seenBy)) ? [] : this.vents.map((v, i) => { let p = this.ventPhase(v, tc, g); if (!p.active && g && g.isFrozen && g.isFrozen(this.id + ':' + i)) p = { ...p, activeIn: 9 }; return { x0: v.x, x1: v.x + v.w, y0: v.y || 0, y1: (v.y || 0) + (v.h || 2.3), active: p.active, activeIn: p.activeIn, clearIn: p.clearIn }; }); }
 
+  freezables(g) { return this.vents.map((v, i) => ({ key: this.id + ':' + i, x: v.x + v.w / 2, y: (v.y || 0) + 1 })); }
   solids() {}
 
   update(g) {
@@ -45,7 +47,7 @@ export class Vents {
     if (!g.sees(this.seenBy)) return; // 내 눈에 안 보이는 불은 내 세계에 없다 → 나는 데지 않는다
     const tc = g.tc;
     for (const v of this.vents) {
-      const p = this.ventPhase(v, tc), y0 = v.y || 0, h = v.h || 2.3;
+      const p = this.ventPhase(v, tc, g), y0 = v.y || 0, h = v.h || 2.3;
       if (p.active && p.k > 0.5 && me.x > v.x + 0.12 && me.x < v.x + v.w - 0.12 && me.y < y0 + h && me.y + 0.9 > y0) { this.hit(g, me.x); return; }
     }
     for (const wv of this.waves(tc)) {
@@ -78,7 +80,7 @@ export class Vents {
     if (layer !== 'front') return;
     const flashU = (g.t - this.flash) / 0.45;
     for (const v of this.vents) {
-      const p = this.ventPhase(v, tc), y = -(v.y || 0), H = v.h || 2.3;
+      const p = this.ventPhase(v, tc, g), y = -(v.y || 0), H = v.h || 2.3;
       if (fog && sees) { // 내 불인데 안개에 가려 안 보인다: 닿는 순간만 비친다
         if (flashU >= 0 && flashU < 1 && this.flashAt != null && this.flashAt > v.x - 0.3 && this.flashAt < v.x + v.w + 0.3) flame(ctx, v.x, y, v.w, H, (1 - flashU) * 0.6, g.t, v.x, T);
         continue;

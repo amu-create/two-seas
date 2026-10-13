@@ -85,6 +85,10 @@ export class Game {
   get viewRole() { const tc = this.tc; let n = 0; for (const t of this.W.flips || []) if (tc - t > 0.65) n++; return this.role ^ (this.chapter.swap ? 1 : 0) ^ (n & 1); }
   sees(kind) { return kind === 'both' || this.viewRole === kind; }
   // 이 장(또는 지금 서 있는 구간)의 도구: 'pull' | 'bubble' | 'echo' | 'size' | null
+  // 시간 멈춤: 멈춤에 걸린 것은 자기만의 시계를 쓴다 (멈춰 있던 시간만큼 늦게 간다). 두 폰이 같은 값을 본다.
+  get _fz() { const c = this.chapter; if (c._fzc === undefined) c._fzc = c.puzzles.find((p) => p.isFreezer) || null; return c._fzc; }
+  localT(key) { const f = this._fz; return f ? f.localT(this, key) : this.tc; }
+  isFrozen(key) { const f = this._fz; return f ? f.frozen(this, key) : false; }
   get tool() { const t = this.chapter.tool; return typeof t === 'function' ? t(this) : (t || (this.chapter.pull ? 'pull' : null)); }
   // 고양이 대신 서 있는 것들(메아리 유령). mine=true: 내 세계에 있는 것, false: 짝의 세계에 있는 것
   standins(mine) { const out = []; for (const p of this.chapter.puzzles) if (p.standins) p.standins(this, mine, out); return out; }
@@ -638,14 +642,19 @@ export class Game {
   }
 
   // 어둠의 구간: 내 주변은 캄캄하고 짝의 주변만 보인다 (내 고양이만은 희미하게 보인다)
+  // dark: { x0, x1, who?(이 역할의 화면만 어둡다), light?(g) → { x, y, r } (빛의 자리) } 또는 그 목록
   _darkness(ctx) {
-    const d = this.chapter.dark; if (!d) return;
+    const D = this.chapter.dark; if (!D) return;
+    for (const d of Array.isArray(D) ? D : [D]) this._dark1(ctx, d);
+  }
+  _dark1(ctx, d) {
+    if (d.who != null && d.who !== this.role) return;
     const v = this.view, me = this.me, o = this.other;
     const a = smoothstep(d.x0 - 2, d.x0 + 3, v.cx) * (1 - smoothstep(d.x1 - 3, d.x1 + 2, v.cx));
     if (a < 0.01) return;
-    const c = o.present ? o : me;
-    const sx = v.W / 2 + (c.x - v.cx) * v.s, sy = v.H / 2 - (c.y + 0.6 - v.cy) * v.s;
-    const g = ctx.createRadialGradient(sx, sy, v.s * 1.9, sx, sy, v.s * 3.5);
+    const c = o.present ? o : me, L = d.light ? d.light(this) : { x: c.x, y: c.y + 0.6, r: 2.6 };
+    const sx = v.W / 2 + (L.x - v.cx) * v.s, sy = v.H / 2 - (L.y - v.cy) * v.s;
+    const g = ctx.createRadialGradient(sx, sy, v.s * L.r * 0.73, sx, sy, v.s * L.r * 1.35);
     g.addColorStop(0, 'rgba(2,4,12,0)'); g.addColorStop(1, `rgba(2,4,12,${0.975 * a})`);
     ctx.fillStyle = g; ctx.fillRect(0, 0, v.W, v.H);
     // 내 고양이는 어둠 위에 다시 그린다 (어디 있는지는 알아야 하니까)

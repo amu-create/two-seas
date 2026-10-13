@@ -77,7 +77,19 @@ export function sign(g, ctx, x, y, kind) {
   const head = (hx, hy, s, col) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(hx - s * 0.62, hy - s * 0.72, s * 0.34, 0, TAU); ctx.arc(hx + s * 0.62, hy - s * 0.72, s * 0.34, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.ellipse(hx, hy, s, s * 0.82, 0, 0, TAU); ctx.fill(); };
   const arrow = (ax, ay, dx, dy) => { ctx.strokeStyle = W; ctx.fillStyle = W; ctx.lineWidth = 0.06; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + dx, ay + dy); ctx.stroke(); const a = Math.atan2(dy, dx); ctx.beginPath(); ctx.moveTo(ax + dx + Math.cos(a) * 0.12, ay + dy + Math.sin(a) * 0.12); ctx.lineTo(ax + dx + Math.cos(a + 2.5) * 0.14, ay + dy + Math.sin(a + 2.5) * 0.14); ctx.lineTo(ax + dx + Math.cos(a - 2.5) * 0.14, ay + dy + Math.sin(a - 2.5) * 0.14); ctx.closePath(); ctx.fill(); };
   const bob = Math.sin(g.t * 2.2) * 0.04;
-  if (kind === 'needle') { // 바늘로 방울을 터뜨려 높이 뛴다 / 앞을 찔러 짝의 거품벽을 터뜨린다
+  if (kind === 'photo') { // 내 세계의 다리를 찍으면 짝의 세계에 생긴다
+    head(-0.45, 0.3, 0.18, A); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 0.05; ctx.strokeRect(-0.75, -0.35, 0.6, 0.42); ctx.beginPath(); ctx.arc(-0.45, -0.14, 0.12, 0, TAU); ctx.stroke();
+    arrow(-0.05, -0.15, 0.4, 0); ctx.setLineDash([0.08, 0.06]); ctx.strokeRect(0.42, -0.1, 0.5, 0.14); ctx.setLineDash([]); head(0.62, 0.38, 0.16, B);
+  } else if (kind === 'draw') { // 짝이 그은 선이 내 발판이 된다
+    head(0.55, 0.3, 0.18, B); ctx.strokeStyle = '#bff4ff'; ctx.lineWidth = 0.07; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-0.8, 0.1); ctx.quadraticCurveTo(-0.3, -0.25 + Math.sin(g.t * 2) * 0.03, 0.2, 0.0); ctx.stroke(); head(-0.45, -0.12, 0.16, A);
+  } else if (kind === 'run') { // 달의 돌을 지나면 길이 무너진다: 달려!
+    head(-0.1, 0.25, 0.17, A); head(0.35, 0.25, 0.17, B); arrow(0.2, -0.3, 0.55, 0);
+    ctx.fillStyle = pal.stoneDark; for (let k = 0; k < 3; k++) { const yy = 0.5 + ((g.t * 0.6 + k * 0.33) % 1) * 0.2; ctx.fillRect(-0.85 + k * 0.18, yy, 0.14, 0.1); }
+  } else if (kind === 'freeze') { // 짝이 내 둘레의 시간을 멈추면, 불도 발판도 유령도 멈춘다
+    head(0.5, 0.32, 0.18, B); ctx.strokeStyle = '#e6f6ff'; ctx.lineWidth = 0.05; ctx.beginPath(); ctx.arc(0.5, 0.1, 0.42 + Math.sin(g.t * 2) * 0.02, 0, TAU); ctx.stroke();
+    ctx.fillStyle = '#ffd59a'; ctx.beginPath(); ctx.moveTo(-0.5, 0.45); ctx.quadraticCurveTo(-0.72, 0.05, -0.45, -0.3); ctx.quadraticCurveTo(-0.32, 0.05, -0.22, 0.45); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#e6f6ff'; ctx.lineWidth = 0.04; for (let k = 0; k < 3; k++) { const t = k / 3 * Math.PI; ctx.beginPath(); ctx.moveTo(-0.46 + Math.cos(t) * 0.22, 0.05 + Math.sin(t) * 0.22); ctx.lineTo(-0.46 - Math.cos(t) * 0.22, 0.05 - Math.sin(t) * 0.22); ctx.stroke(); }
+  } else if (kind === 'needle') { // 바늘로 방울을 터뜨려 높이 뛴다 / 앞을 찔러 짝의 거품벽을 터뜨린다
     ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 0.05; ctx.beginPath(); ctx.arc(-0.35, 0.18, 0.32, 0, TAU); ctx.stroke(); head(-0.35, 0.22, 0.17, A);
     ctx.strokeStyle = W; ctx.lineWidth = 0.06; ctx.beginPath(); ctx.moveTo(-0.05, 0.0); ctx.lineTo(0.3, -0.25); ctx.stroke(); arrow(-0.35, -0.25, 0, -0.32);
     ctx.fillStyle = 'rgba(233,246,255,0.7)'; for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.arc(0.62, -0.3 + k * 0.22, 0.1, 0, TAU); ctx.fill(); }

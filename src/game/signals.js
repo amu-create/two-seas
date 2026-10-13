@@ -44,7 +44,7 @@ export class Signals {
     };
     doc.addEventListener('pointerup', up); doc.addEventListener('pointercancel', up);
   }
-  ready() { const g = this.g; return g.W && g.W.phase !== 'lobby' && !g.W.end && !g.paused; }
+  ready() { const g = this.g; return g.W && g.W.phase !== 'lobby' && !g.W.end && !g.paused && !g.drawMode; } // 붓을 든 동안은 화면 긋기가 선이 된다
   _wheel() {
     const el = this.el = document.createElement('div'); el.id = 'wheel'; el.className = 'hidden';
     el.innerHTML = `<div class="c" data-k="here"><b>⚑</b><span>여기</span></div>` + ITEMS.map((it) => {

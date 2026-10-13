@@ -1,13 +1,10 @@
-// 5장 · 두 개의 달 — 실 당기기를 배우고, 바다가 두 번 뒤바뀌는 가운데 지금까지의 모든 것을 쓴다
+// 5장 · 두 개의 달 — 역할이 나뉜다.  1P = 사진(내 세계의 다리·기둥·짝이 그어 준 선을 찍으면, 짝의 세계에 그대로 생긴다. 사진은 한 장뿐)
+//                                     2P = 선 그리기(붓을 들고 화면을 그으면, 그 선이 1P의 세계에 9초 동안 발판이 된다. 잉크는 구간마다 정해져 있다)
+// 끝에는 달의 돌을 지나는 순간 뒤에서부터 길이 무너진다 → 선 하나, 사진 한 장을 빠르게.
 import { Links } from '../puzzles/worlds.js';
-import { Vents } from '../puzzles/vents.js';
-import { Movers } from '../puzzles/movers.js';
-import { Lift } from '../puzzles/lift.js';
-import { Lanterns } from '../puzzles/lanterns.js';
-import { Bubbles } from '../puzzles/bubbles.js';
-import { Echo } from '../puzzles/echo.js';
-import { Beam } from '../puzzles/beam.js';
-import { Flood } from '../puzzles/flood.js';
+import { Ink } from '../puzzles/ink.js';
+import { Photo } from '../puzzles/photo.js';
+import { Crumble } from '../puzzles/crumble.js';
 import { Stars } from '../puzzles/stars.js';
 import { ground, cps, chapter } from './base.js';
 import { sat } from '../util.js';
@@ -15,60 +12,51 @@ import * as P from '../render/props.js';
 
 export function makeChapter5() {
   return chapter({
-    id: 5, title: '두 개의 달', subtitle: '마지막 장 · 지금까지의 모든 것',
+    id: 5, title: '두 개의 달', subtitle: '마지막 장 · 사진과 선',
     endTitle: '끝', endLine: '두 개의 바다, 하나의 달', endNext: '함께해 줘서 고마워요',
-    stack: true, final: true,
-    // 마지막 장은 지금까지의 도구를 구간마다 바꿔 쥔다: 실 → (벼랑 밑) 방울 → 실 → 메아리
-    tool: (g) => { const me = g.me; return me.x < 72 ? 'pull' : me.x < 84.6 && me.y < 8 ? 'bubble' : me.x < 99 ? 'pull' : me.x < 124.5 ? 'echo' : me.x > 161 ? 'pull' : null; },
-    length: 182, bounds: { min: -6.6, max: 178.6 },
+    stack: false, swap: false, final: true,
+    tool: (g) => (g.role === 0 ? 'photo' : 'draw'),
+    length: 146, bounds: { min: -6.6, max: 142.6 },
     solids: [
-      ground(-8, 10), ground(10, 20, 'stone', 2.8), ground(28, 34, 'stone', 2.8), ground(34, 36, 'stone', 1.4), ground(36, 40),
-      ground(48.4, 50, 'stone'), ground(60, 62, 'stone'), ground(62, 70), ground(70, 84, 'stone', 4.6), ground(84, 104, 'stone', 9.4), ground(114, 163, 'stone', 9.4),
-      // 물이 차오르는 탑: 계단 하나하나는 1.6칸, 가운데 한 칸만 3칸이라 짝의 머리를 밟고 오르고, 위에서 실로 끌어올린다
-      ground(163, 165, 'stone', 11.0), ground(165, 167, 'stone', 12.6), ground(167, 169, 'stone', 15.6), ground(169, 171, 'stone', 17.2), ground(171, 181, 'stone', 18.8),
+      ground(-8, 10), ground(16, 26), ground(32, 50), ground(50, 56, 'stone', 4.0), ground(62, 66, 'stone', 4.0), ground(70, 74, 'stone', 4.0), ground(78, 84, 'stone', 4.0),
+      ground(84, 86), ground(98, 106), ground(132, 146),
     ],
-    checkpoints: cps([2.9, { x: 12.4, y: 2.8 }, { x: 29.4, y: 2.8 }, 37, 49.2, 63, { x: 73.6, y: 4.6 }, { x: 87.4, y: 9.4 }, { x: 101, y: 9.4 }, { x: 115.6, y: 9.4 }, { x: 126.4, y: 9.4 }, { x: 142.6, y: 9.4 }, { x: 161.0, y: 9.4 }]),
+    checkpoints: cps([2.9, 17, 33, { x: 51.4, y: 4 }, { x: 63, y: 4 }, { x: 71, y: 4 }, { x: 79.4, y: 4 }, 85, 99, 103.2, 133]),
     puzzles: [
-      new Stars({ id: 'stars', list: [{ x: 15, y: 6.4, world: 1 }, { x: 79, y: 10.5, world: 0 }, { x: 120.7, y: 12.0, world: 1 }] }),   // 별조각 셋: 안 모아도 되지만, 이 장의 손발을 한 번 더 궁리해야 닿는다
-      // 넓은 틈(8칸): 나룻배 발판은 빛의 세계에만 있다. 먼저 건넌 쪽이 실을 당겨 주면 짝은 허공을 건너온다.
-      new Movers({ id: 'ferry', seenBy: 0, list: [{ x0: 20.3, x1: 25.5, y: 2.8, w: 2.2, period: 8, phase: 0 }] }),
-      // 반쪽 다리 (바다가 뒤바뀐 뒤라 누가 어느 반쪽을 가졌는지도 바뀌어 있다)
-      new Links({ id: 'br1', things: [{ kind: 'bridge', world: 0, x: 40, w: 4.8 }, { kind: 'bridge', world: 1, x: 44.8, w: 3.6 }] }),
-      // 곁얼음: 물길 위에 한 사람의 세계에는 얼음길이 다 얼어 있고, 다른 사람의 세계에는 짝의 곁에서만 얼음이 언다 → 꼭 붙어서 같이 걷는다.
-      // 얼음길 주인에게만 보이는 불꽃이 길 가운데서 솟는다 → "멈춰!" 하면 둘 다 멈춰야 한다.
-      new Links({ id: 'ice', things: [{ kind: 'bridge', look: 'ice', world: 0, x: 50, w: 10 }, { kind: 'aura', world: 1, x: 50, w: 10, r: 2.3 }] }),
-      new Vents({ id: 'hall', seenBy: 0, vents: [{ x: 54.4, w: 1.6, period: 5.4, on: 1.6, phase: 0 }] }),
-      new Lift({ id: 'lift', x: 67.5, w: 2.5, y0: 0, y1: 4.6, cranks: [{ x: 64.4, y: 0 }, { x: 72.4, y: 4.6 }] }),
-      new Vents({ id: 'jet', seenBy: 1, vents: [{ x: 67.5, w: 2.5, y: 2.3, h: 0.9, period: 5.5, on: 1.8, phase: 0 }] }),
-      new Vents({ id: 'jet0', seenBy: 0, vents: [{ x: 67.5, w: 2.5, y: 2.3, h: 0.9, period: 5.5, on: 1.8, phase: 2.75 }] }),
-      // 높은 벼랑(4.8칸): 한 명이 밑에서 방울을 불어 짝을 올려 보내고, 올라간 쪽이 실을 당겨 짝을 끌어올린다 (방울 + 실)
-      new Bubbles({ id: 'bub' }),
-      // 메아리 둘: 빛의 세계에만 있는 다리(빛이 녹화, 그림자가 탄다) → 빛의 세계에만 깔린 불바닥(그림자가 녹화, 빛이 탄다)
-      new Echo({ id: 'echo' }),
-      new Links({ id: 'e1', things: [{ kind: 'bridge', world: 0, x: 104, w: 10, y: 9.4 }] }),
-      new Links({ id: 'e2', things: [{ kind: 'flame', world: 0, x: 118.4, w: 4.6, y: 9.4, h: 0.8, burn: true }] }),
-      // 빛줄기와 거울: 빛줄기·수정·과녁은 빛의 눈에만, 거울을 돌리는 받침돌은 그림자만 쓴다. 돌릴 수 있는 횟수가 정해져 있다.
-      new Beam({ id: 'light', world: 0, x0: 125.6, y: 9.4, cols: [128.4, 131.2, 134.0, 136.8], targetX: 139.6, door: { x: 140.4, w: 0.95, h: 4.3 } }),
-      new Lanterns({ id: 'lamps', beatId: 'moon', y: 9.4, rows: [{ xs: [146, 147.3, 148.6, 149.9] }, { xs: [153.3, 154.6, 155.9, 157.2] }], stoneX: 151.6 }),
-      // 등불을 다 켜고 탑 밑에 서면 물이 차오른다
-      new Flood({ id: 'flood', x0: 162.2, start: 9.0, speed: 0.25, when: (g) => !!g.pz('lamps').open }),
+      new Stars({ id: 'stars', list: [{ x: 13.0, y: 2.6, world: 0 }, { x: 59.0, y: 6.2, world: 1 }, { x: 127.0, y: 2.2, world: 0 }] }),
+      new Ink({ id: 'ink', world: 0, zones: [{ x0: 20, x1: 40, n: 8 }, { x0: 50, x1: 66, n: 8 }, { x0: 84, x1: 100, n: 7 }, { x0: 103, x1: 132, n: 5 }] }),
+      new Photo({
+        id: 'photo', world: 0, ink: 'ink',
+        items: [
+          { x: 10, y: 0, w: 6 },            // ① 1P에게만 있는 다리
+          { x: 47.2, y: 2.2, w: 1.4, h: 2.2 }, // ③ 1P에게만 있는 디딤 기둥
+          { x: 66, y: 4.0, w: 4 },          // ⑤ 다리 둘, 사진은 한 장
+          { x: 74, y: 4.0, w: 4 },
+          { x: 122, y: 0, w: 4 },           // ⑦ 탈출 길의 두 번째 구멍
+        ],
+      }),
+      // ② 2P에게만 있는 다리 → 1P에게는 2P가 선을 그어 준다
+      new Links({ id: 'b2', things: [{ kind: 'bridge', world: 1, x: 26, w: 6 }] }),
+      // ⑥ 넓은 물(12칸): 2P에게만 다리. 잉크(7칸)로는 한 번에 못 잇는다 → 선 두 개 + 사이는 뛰기
+      new Links({ id: 'b6', things: [{ kind: 'bridge', world: 1, x: 86, w: 12 }] }),
+      // ⑦ 탈출: 달의 돌을 지나면 뒤에서부터 길이 무너진다. 첫 구멍은 1P에게(선), 두 번째 구멍은 2P에게(사진)
+      new Links({ id: 'b7', things: [{ kind: 'bridge', world: 1, x: 114, w: 4 }] }),
+      new Crumble({ id: 'run', trigger: 105.4, y: 0, delay: 3.0, speed: 1.15, tiles: [[106, 108], [108, 110], [110, 112], [112, 114], [118, 120], [120, 122], [126, 128], [128, 130], [130, 132]] }),
     ],
     beats: {
-      up: { when: (g) => g.bothPast(10.4) && g.me.y > 2.5 && g.other.y > 2.5, dur: 2.0 },
-      f1: { when: (g) => g.bothPast(28.6), dur: 2.6, flip: true },          // 바다가 뒤바뀐다
-      f2: { when: (g) => g.bothPast(62.6), dur: 2.6, flip: true },          // 다시 제자리로
-      top: { when: (g) => g.bothPast(70.6) && g.me.y > 4 && g.other.y > 4, dur: 2.0 },
-      c2: { when: (g) => g.bothPast(84.6) && g.me.y > 9 && g.other.y > 9, dur: 2.0 },
-      e1: { when: (g) => g.bothPast(114.6) && g.me.y > 9 && g.other.y > 9, dur: 2.0 },
-      e2: { when: (g) => g.bothPast(123.6) && g.me.y > 9 && g.other.y > 9, dur: 2.0 },
-      lb: { when: (g) => g.pz('light').open && g.bothPast(141.6), dur: 2.0 },
-      moon: { focus: 159, dur: 3.0 },
+      p1: { when: (g) => g.bothPast(16.6), dur: 2.0 },
+      d1: { when: (g) => g.bothPast(32.6), dur: 2.0 },
+      c1: { when: (g) => g.bothPast(50.6) && g.me.y > 3.5 && g.other.y > 3.5, dur: 2.0 },
+      c2: { when: (g) => g.bothPast(62.6) && g.me.y > 3.5 && g.other.y > 3.5, dur: 2.0 },
+      c3: { when: (g) => g.bothPast(78.6) && g.me.y > 3.5 && g.other.y > 3.5, dur: 2.0 },
+      w1: { when: (g) => g.bothPast(98.6), dur: 2.0 },
+      run: { when: (g) => g.bothPast(132.6), dur: 2.4 },
     },
-    end: { when: (g) => g.pz('lamps').open && g.bothIn(171.4, 178.5) && g.me.y > 18 && g.other.y > 18, spots: [173.95, 175.05], y: 18.8, camX: 174.5, flip: false },
+    end: { when: (g) => g.bothIn(135.4, 142.4), spots: [138.45, 139.55], y: 0, camX: 139, flip: false },
     drawBack(g, ctx) {
-      P.boat(g, ctx, -3.4); P.sign(g, ctx, 6.4, 0, 'stack'); P.sign(g, ctx, 15.4, 2.8, 'pull'); P.sign(g, ctx, 62.6, 0, 'crank'); P.sign(g, ctx, 76.4, 4.6, 'bubble'); P.sign(g, ctx, 90.6, 9.4, 'pull'); P.sign(g, ctx, 99.6, 9.4, 'echo'); P.sign(g, ctx, 124.4, 9.4, 'beam'); P.sign(g, ctx, 161.8, 9.4, 'stack');
-      const st = g.pz('lamps'); // 등불을 다 켜면 달문 안에서 두 달이 하나로 겹친다
-      P.moonArch(g, ctx, 174.5, 18.8, st.open ? 0.35 + 0.65 * sat((g.tc - st.open) / 3) : 0.3);
+      P.boat(g, ctx, -3.4); P.sign(g, ctx, 7.4, 0, 'photo'); P.sign(g, ctx, 22.6, 0, 'draw'); P.sign(g, ctx, 101.6, 0, 'run');
+      const st = g.pz('run'); // 달의 돌: 지나면 길이 무너지기 시작한다
+      P.moonArch(g, ctx, 139, 0, st.t0 ? 0.35 + 0.65 * sat((g.tc - st.t0) / 3) : 0.3);
     },
   });
 }

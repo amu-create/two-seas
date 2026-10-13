@@ -10,15 +10,22 @@ export class Movers {
     const a = TAU * (tc + (m.phase || 0)) / m.period;
     return { x: lerp(m.x0, m.x1, 0.5 - 0.5 * Math.cos(a)), vx: (m.x1 - m.x0) * 0.5 * Math.sin(a) * TAU / m.period };
   }
-  solids(g, out) { if (!g.sees(this.seenBy)) return; /* 내 눈에 안 보이는 발판은 내 세계에 없다 */ const tc = g.tc; for (const m of this.list) { const p = this.at(m, tc); out.push({ x: p.x, y: m.y - 0.3, w: m.w, h: 0.3, vx: p.vx, mover: true }); } }
+  key(i) { return this.id + ':' + i; }
+  lt(g, i) { return g.localT ? g.localT(this.key(i)) : g.tc; }   // 시간 멈춤에 걸리면 이 발판만 멈춘다
+  freezables(g) { return this.list.map((m, i) => { const p = this.at(m, this.lt(g, i)); return { key: this.key(i), x: p.x + m.w / 2, y: m.y }; }); }
+  solids(g, out) { if (!g.sees(this.seenBy)) return; /* 내 눈에 안 보이는 발판은 내 세계에 없다 */ this.prevX = this.prevX || []; this.list.forEach((m, i) => {
+    const p = this.at(m, this.lt(g, i)), fz = g.isFrozen && g.isFrozen(this.key(i)), prev = this.prevX[i]; this.prevX[i] = p.x;
+    // 실려 가는 거리 = 지난번 계산 뒤 발판이 실제로 간 거리 (느린 폰에서도 발판에서 미끄러지지 않게)
+    let vx = fz ? 0 : p.vx; if (prev != null && g.dtLast > 0 && Math.abs(p.x - prev) < 1) vx = (p.x - prev) / g.dtLast;
+    out.push({ x: p.x, y: m.y - 0.3, w: m.w, h: 0.3, vx, mover: true }); }); }
   update() {}
   host() { return false; }
   onFx() {}
   draw(g, ctx, layer) {
     if (layer !== 'back') return;
-    const pal = g.pal, tc = g.tc, sees = g.sees(this.seenBy);
-    for (const m of this.list) {
-      const p = this.at(m, tc), Y = -m.y, cx = p.x + m.w / 2;
+    const pal = g.pal, sees = g.sees(this.seenBy);
+    for (const [i, m] of this.list.entries()) {
+      const p = this.at(m, this.lt(g, i)), Y = -m.y, cx = p.x + m.w / 2;
       const ridden = [g.me, g.other].some((c) => c.present && c.ground && Math.abs(c.y - m.y) < 0.08 && c.x > p.x - 0.3 && c.x < p.x + m.w + 0.3);
       if (sees) {
         // 오가는 길(점선)과 빛나는 구름 발판

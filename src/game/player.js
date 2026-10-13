@@ -99,7 +99,8 @@ export class Player {
     for (const s of solids) {
       if (this.x + hw <= s.x + 0.001 || this.x - hw >= s.x + s.w - 0.001) continue;
       const top = s.y + s.h;
-      if (this.vy <= 0 && this.y >= top - 0.02 && ny <= top) { ny = top; this.vy = 0; grounded = true; if (s.vx) this.x += s.vx * dt; }
+      // step: 그어 준 선처럼 비탈진 발판은 살짝 올라서도 밟힌다
+      if (this.vy <= 0 && this.y >= top - (s.step || 0.02) && ny <= top) { ny = top; this.vy = 0; grounded = true; if (s.vx) this.x += s.vx * dt; }
       else if (s.carry && this.vy <= 1.5 && this.y < top && this.y > top - 0.45) { ny = top; this.vy = 0; grounded = true; } // 올라오는 승강기가 발밑에서 밀어 올린다
       else if (!s.oneWay && this.vy > 0 && this.y + H <= s.y + 0.02 && ny + H >= s.y) { ny = s.y - H; this.vy = 0; }
     }

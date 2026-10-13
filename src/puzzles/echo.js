@@ -14,11 +14,14 @@ export class Echo {
   init() { return { g: [null, null] }; }
   ghost(g, role) { // 지금 유령의 자리
     const G = g.pz(this.id).g[role]; if (!G || G.p.length < 2) return null;
-    const dur = (G.p.length - 1) * STEP, cyc = dur + HOLD, tt = g.tc - G.t0; if (tt < 0) return null;
+    const dur = (G.p.length - 1) * STEP, cyc = dur + HOLD, tt = (g.localT ? g.localT(this.key(role, G)) : g.tc) - G.t0; if (tt < 0) return null; // 시간 멈춤에 걸리면 유령이 그 자리에 멈춘다
     const u = tt % cyc, k = Math.min(u, dur) / STEP, i = Math.min(G.p.length - 2, Math.floor(k)), f = Math.min(1, k - i);
     const a = G.p[i], b = G.p[i + 1];
-    return { x: lerp(a[0], b[0], f), y: lerp(a[1], b[1], f), vx: u < dur ? (b[0] - a[0]) / STEP : 0, vy: u < dur ? (b[1] - a[1]) / STEP : 0, ground: !!a[2] || u >= dur, fade: Math.min(sat(u / 0.25), sat((cyc - u) / 0.25)), held: u >= dur };
+    const mv = u < dur && !(g.isFrozen && g.isFrozen(this.key(role, G)));
+    return { x: lerp(a[0], b[0], f), y: lerp(a[1], b[1], f), vx: mv ? (b[0] - a[0]) / STEP : 0, vy: mv ? (b[1] - a[1]) / STEP : 0, ground: !!a[2] || u >= dur, fade: Math.min(sat(u / 0.25), sat((cyc - u) / 0.25)), held: u >= dur };
   }
+  key(role, G) { return this.id + ':' + role + ':' + G.t0; }
+  freezables(g) { const out = []; for (let r = 0; r < 2; r++) { const G = g.pz(this.id).g[r], gh = this.ghost(g, r); if (G && gh && gh.fade > 0.5) out.push({ key: this.key(r, G), x: gh.x, y: gh.y + 0.5 }); } return out; }
   // 누름돌용: 유령은 "짝의 세계"의 고양이 대역이다
   standins(g, mine, out) { const gh = this.ghost(g, mine ? 1 - g.role : g.role); if (gh && gh.fade > 0.5) out.push({ x: gh.x, y: gh.y, ground: gh.ground, state: 'play', present: true, size: 1 }); }
   solids(g, out) {
@@ -26,7 +29,8 @@ export class Echo {
     if (!gh || gh.fade < 0.5) { this.prevHead = null; this.onHead = false; return; }
     const hy = gh.y + 0.92, prev = this.prevHead;
     // 유령 머리 위에 가만히 있으면 붙어서 실려 간다 (움직이거나 뛰면 내린다)
-    const on = me.state === 'play' && prev && Math.abs(me.x - prev.x) < 0.8 && Math.abs(me.y - prev.y) < 0.3 && me.vy <= 0.5 && !(g.inp && (g.inp.x || g.inp.jump || g.inp.jumpPressed)) && (this.onHead || me.ground);
+    // 한 번 올라탔으면 (느린 폰에서 유령이 한 번에 많이 움직여도) 손을 쓰기 전까지 계속 붙어 간다
+    const on = me.state === 'play' && prev && !(g.inp && (g.inp.x || g.inp.jump || g.inp.jumpPressed)) && (this.onHead || (Math.abs(me.x - prev.x) < 0.8 && Math.abs(me.y - prev.y) < 0.3 && me.vy <= 0.5 && me.ground));
     if (on && Math.hypot(gh.x - prev.x, hy - prev.y) < 5) { me.x = gh.x; me.y = hy; me.vy = 0; if (!this.onHead) haptics.buzz('ride'); this.onHead = true; } else this.onHead = false;
     this.prevHead = { x: gh.x, y: hy };
     out.push({ x: gh.x - 0.45, y: hy - 0.12, w: 0.9, h: 0.12, oneWay: true });
